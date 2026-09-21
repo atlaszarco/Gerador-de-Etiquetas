@@ -1,17 +1,17 @@
 /* Service Worker — Gerador de Etiquetas */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `etq-cache-${CACHE_VERSION}`;
 
 /* Recursos que fazem parte do "app shell". Tudo que você precisa para abrir offline. */
 const APP_SHELL = [
   './',
   './index.html',
-  './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-maskable.png',
-  './apple-touch-icon.png',
-  './favicon-32.png',
+  './manifest.webmanifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable.png',
+  './icons/apple-touch-icon.png',
+  './icons/favicon-32.png',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js'
