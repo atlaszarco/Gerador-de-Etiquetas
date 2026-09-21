@@ -1,5 +1,5 @@
 /* Service Worker — Gerador de Etiquetas */
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `etq-cache-${CACHE_VERSION}`;
 
 /* Recursos que fazem parte do "app shell". Tudo que você precisa para abrir offline. */
@@ -26,7 +26,7 @@ self.addEventListener('install', event => {
           cache.add(url).catch(err => console.warn('Falha ao cachear:', url, err))
         )
       );
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -70,4 +70,11 @@ self.addEventListener('fetch', event => {
       });
     })
   );
+});
+
+/* Permite que o app peça para o SW em waiting assumir na hora */
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
