@@ -1,0 +1,2523 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gerador de Etiquetas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a237e">
+<meta name="description" content="Gerador de etiquetas a partir de planilha Excel.">
+
+<!-- PWA -->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Etiquetas">
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #222; background: #eef1f4; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ===== Splash ===== */
+.splash { position: fixed; inset: 0; z-index: 9999; background: linear-gradient(135deg, #1a237e 0%, #3949ab 55%, #7986cb 100%); display: flex; align-items: center; justify-content: center; transition: opacity .55s ease; }
+.splash.fade-out { opacity: 0; pointer-events: none; }
+.splash-inner { text-align: center; color: #fff; transform: translateY(-6px); padding: 20px; }
+.splash-logo { font-size: 72px; line-height: 1; margin-bottom: 14px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.25)); }
+.splash-title { font-size: 30px; font-weight: 700; letter-spacing: .5px; }
+.splash-sub { margin-top: 6px; font-size: 13px; opacity: .8; letter-spacing: .4px; }
+.splash-credit { margin-top: 22px; font-size: 12.5px; opacity: .9; letter-spacing: .3px; padding: 6px 14px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; display: inline-block; }
+.splash-bar { width: 160px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.25); margin: 20px auto 0; overflow: hidden; }
+.splash-bar::after { content: ''; display: block; height: 100%; width: 40%; background: #fff; border-radius: 2px; animation: splashbar 1.2s ease-in-out infinite; }
+@keyframes splashbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
+
+/* ===== Header ===== */
+.header { padding: 10px 20px; background: #1a237e; color: #fff; flex-shrink: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.header .credit { font-size: 11.5px; opacity: .8; letter-spacing: .3px; }
+
+/* ===== Layout ===== */
+.main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.sidebar { flex: 1 1 0; min-width: 360px; max-width: 100%; overflow-y: auto; background: #fff; -webkit-overflow-scrolling: touch; }
+.sidebar.with-preview { flex: 0 0 auto; max-width: 72%; }
+.sidebar-resizer { display: none; width: 6px; cursor: col-resize; flex-shrink: 0; background: #d6dce3; position: relative; transition: background .15s; touch-action: none; }
+.sidebar-resizer.visible { display: block; }
+.sidebar-resizer::after { content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%); width: 2px; height: 40px; border-radius: 1px; background: rgba(26,35,126,.25); }
+.sidebar-resizer:hover, .sidebar-resizer.active { background: #c5cae9; }
+.preview-pane { display: none; flex: 1; overflow: auto; background: #eef1f4; padding: 18px; min-width: 0; -webkit-overflow-scrolling: touch; }
+.preview-pane.visible { display: block; }
+
+.panel { padding: 14px 18px; border-bottom: 1px solid #e6eaf0; }
+.panel:last-child { border-bottom: none; }
+.panel h2 { margin: 0 0 8px; font-size: 11px; color: #1a237e; text-transform: uppercase; letter-spacing: .6px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-end; margin-bottom: 8px; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.field label { font-size: 10.5px; color: #555; }
+.field input, .field select { padding: 5px 7px; font-size: 12.5px; border: 1px solid #ccd2da; border-radius: 4px; width: 80px; background: #fff; }
+.field select { width: auto; min-width: 220px; }
+.field input[type="text"] { width: 100%; }
+.hint { font-size: 11px; color: #666; margin: 0 0 8px; line-height: 1.4; }
+.hint code { background: #eceff1; padding: 1px 4px; border-radius: 3px; }
+.hint kbd { background: #eceff1; padding: 1px 5px; border-radius: 3px; font-size: 10px; border: 1px solid #cfd5dc; }
+.hint .tag-blue { color: #1a237e; font-weight: 600; }
+.hint .tag-green { color: #2e7d32; font-weight: 600; }
+.hint .tag-orange { color: #e65100; font-weight: 600; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; padding: 8px; background: #f0f2f6; border: 1px solid #ccd2da; border-bottom: none; border-radius: 4px 4px 0 0; }
+.tb-group { display: flex; flex-direction: column; background: #fff; border: 1px solid #e0e5eb; border-radius: 5px; padding: 3px 6px 5px; }
+.tb-group-label { font-size: 9px; font-weight: 700; color: #5c6bc0; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; padding-left: 2px; }
+.tb-group-body { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.tb-btn { min-width: 26px; height: 26px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; border: 1px solid #ccd2da; background: #fff; border-radius: 3px; cursor: pointer; color: #333; font-family: inherit; white-space: nowrap; }
+.tb-btn:hover { background: #e8eef7; }
+.tb-btn.active { background: #c5cae9; border-color: #7986cb; color: #1a237e; }
+.tb-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tb-group-body .inline { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: #444; }
+.tb-group-body select, .tb-group-body input[type="number"] { font-size: 11px; padding: 2px 4px; border: 1px solid #ccd2da; border-radius: 3px; background: #fff; height: 26px; }
+.tb-group-body input[type="color"] { padding: 0; width: 28px; height: 26px; cursor: pointer; border: 1px solid #ccd2da; border-radius: 3px; background: #fff; }
+.tb-group-body .sep-v { width: 1px; height: 20px; background: #d2d8df; margin: 0 3px; }
+.align-grid { display: inline-grid; grid-template-columns: repeat(3, 18px); grid-template-rows: repeat(3, 18px); gap: 1px; padding: 1px; background: #fff; border: 1px solid #ccd2da; border-radius: 3px; }
+.align-grid button { width: 18px; height: 18px; padding: 0; margin: 0; border: none; background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #555; border-radius: 2px; }
+.align-grid button:hover { background: #e8eef7; }
+.align-grid button.active { background: #c5cae9; color: #1a237e; }
+
+.lib-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.lib-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #f5f7fa; border: 1px solid #e0e5eb; border-radius: 4px; font-size: 12px; }
+.lib-item .name { flex: 1; font-weight: 500; }
+.lib-item .date { color: #888; font-size: 10.5px; }
+.lib-item button { padding: 3px 8px; font-size: 11px; border: 1px solid #ccd2da; background: #fff; border-radius: 3px; cursor: pointer; }
+.lib-item button:hover { background: #e8eef7; }
+.lib-empty { font-size: 11px; color: #888; padding: 4px; }
+
+.editor-stage { position: relative; padding: 24px 18px; background: repeating-linear-gradient(45deg, #f7f8fa 0 6px, #eef1f4 6px 12px); border: 1px solid #ccd2da; border-top: none; border-radius: 0 0 4px 4px; overflow: auto; text-align: center; min-height: 340px; }
+.label-zoom-frame { display: inline-block; text-align: left; width: calc(var(--lw, 99.1) * 1mm * var(--zoom, 1)); height: calc(var(--lh, 33.9) * 1mm * var(--zoom, 1)); }
+.label-outline { position: relative; width: calc(var(--lw, 99.1) * 1mm); height: calc(var(--lh, 33.9) * 1mm); background: #fff; border: 1.5px dashed #1a237e; transform: scale(var(--zoom, 1)); transform-origin: top left; transition: border-color .15s, box-shadow .15s; flex-shrink: 0; }
+.label-outline.overflow { border-color: #c62828; box-shadow: 0 0 0 3px rgba(198,40,40,.15); }
+
+.label-content { width: 100%; height: 100%; padding: 1.8mm 2mm; box-sizing: border-box; outline: none; overflow: hidden; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; line-height: 1.25; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: left; }
+.label-content table, .label table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.label-content td, .label-content th, .label td, .label th { padding: 0; height: 20px; overflow: hidden; vertical-align: top; position: relative; }
+.label-content .cell-inner, .label .cell-inner { position: absolute; inset: 0; padding: 1px 3px; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-start; line-height: 1.15; }
+.label-content .cell-inner > *, .label .cell-inner > * { min-height: 0; max-width: 100%; }
+.label-content td > .cell-inner, .label td > .cell-inner { justify-content: flex-start; }
+.label-content td.cell-top > .cell-inner > *:last-child,
+.label td.cell-top > .cell-inner > *:last-child { margin-bottom: auto; }
+.label-content td.cell-mid > .cell-inner > *:first-child,
+.label td.cell-mid > .cell-inner > *:first-child { margin-top: auto; }
+.label-content td.cell-mid > .cell-inner > *:last-child,
+.label td.cell-mid > .cell-inner > *:last-child { margin-bottom: auto; }
+.label-content td.cell-bot > .cell-inner > *:first-child,
+.label td.cell-bot > .cell-inner > *:first-child { margin-top: auto; }
+.label-content td.cell-overflow .cell-inner, .label td.cell-overflow .cell-inner { outline: 1px dashed #e57373; outline-offset: -1px; }
+.label-content td.active-cell { box-shadow: inset 0 0 0 1px #1a237e; }
+.label-content td.active-cell::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: rgba(26,35,126,.08); z-index: 0; }
+.label-content td.active-cell .cell-inner { z-index: 1; background: #fff; }
+.label-content p { margin: 2px 0; }
+.label-content img, .label img { max-width: 100%; height: auto; vertical-align: middle; }
+.label-content svg, .label svg { max-width: 100%; height: auto; vertical-align: middle; }
+
+.editor-caption { font-size: 10.5px; color: #555; font-family: ui-monospace, Consolas, monospace; margin-top: 10px; cursor: pointer; user-select: none; display: inline-block; padding: 3px 8px; border-radius: 3px; background: rgba(255,255,255,.7); border: 1px solid transparent; }
+.editor-caption:hover { background: #fff; border-color: #ccd2da; color: #1a237e; }
+.editor-caption::before { content: '🔍 '; }
+
+#handleLayer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 5; }
+.resizer { position: absolute; pointer-events: auto; z-index: 7; display: none; touch-action: none; }
+.col-resizer { width: 8px; cursor: col-resize; }
+.row-resizer { height: 8px; cursor: row-resize; }
+.col-resizer::after, .row-resizer::after { content: ''; position: absolute; background: rgba(26,35,126,.35); }
+.col-resizer::after { left: 3px; top: 0; bottom: 0; width: 2px; border-radius: 1px; }
+.row-resizer::after { top: 3px; left: 0; right: 0; height: 2px; border-radius: 1px; }
+.col-resizer:hover::after, .col-resizer.active::after, .row-resizer:hover::after, .row-resizer.active::after { background: rgba(26,35,126,.9); }
+
+.pad-handle { position: absolute; pointer-events: auto; z-index: 6; display: none; touch-action: none; }
+.pad-handle::after { content: ''; position: absolute; background: rgba(76,175,80,.55); border-radius: 2px; transition: background .12s; }
+.pad-handle:hover::after, .pad-handle.active::after { background: rgba(56,142,60,.98); }
+.pad-handle-t, .pad-handle-b { height: 10px; cursor: ns-resize; }
+.pad-handle-t::after { left: 0; right: 0; top: 4px; height: 2px; }
+.pad-handle-b::after { left: 0; right: 0; top: 4px; height: 2px; }
+.pad-handle-l, .pad-handle-r { width: 10px; cursor: ew-resize; }
+.pad-handle-l::after { top: 0; bottom: 0; left: 4px; width: 2px; }
+.pad-handle-r::after { top: 0; bottom: 0; left: 4px; width: 2px; }
+
+.field-token { display: inline; padding: 0 2px; margin: 0; background: #e3f2fd; color: #0d47a1; border-radius: 2px; font: inherit; line-height: inherit; cursor: default; user-select: all; white-space: normal; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.field-token.code-token { background: #fff3e0; color: #e65100; border: 1px dashed #ffb74d; }
+
+.status { font-size: 11.5px; color: #555; margin-top: 6px; white-space: pre-line; line-height: 1.4; }
+.status.ok { color: #2e7d32; }
+.status.warn { color: #b26a00; }
+.status.err { color: #c62828; }
+button.primary { padding: 8px 14px; font-size: 12.5px; border: none; border-radius: 4px; background: #1a237e; color: #fff; cursor: pointer; font-weight: 500; margin-right: 6px; }
+button.primary:hover { background: #283593; }
+button.primary:disabled { background: #b0bec5; cursor: not-allowed; }
+button.primary.print { background: #2e7d32; }
+button.primary.print:hover { background: #388e3c; }
+button.primary.test { background: #6a1b9a; }
+button.primary.test:hover { background: #7b1fa2; }
+
+.page { background: #fff; margin: 0 auto 18px; box-shadow: 0 2px 10px rgba(0,0,0,.15); display: grid; overflow: hidden; position: relative; }
+.margin-box { position: absolute; pointer-events: none; z-index: 1; background: rgba(26, 35, 126, 0.07); }
+.label { overflow: hidden; font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; line-height: 1.2; outline: 1px dashed rgba(0,0,0,.14); outline-offset: -1px; position: relative; z-index: 2; display: flex; flex-direction: column; padding: 1.8mm 2mm; }
+
+/* ===== Folha de teste ===== */
+.test-page { position: relative; }
+.test-cut { position: absolute; z-index: 3; pointer-events: none; border-color: #d81b60; }
+.test-cut-v { border-left: 1px dashed #d81b60; }
+.test-cut-h { border-top: 1px dashed #d81b60; }
+.test-label-marker { position: absolute; z-index: 4; pointer-events: none; font-family: Arial, sans-serif; font-size: 6pt; color: #999; top: 1mm; left: 1mm; }
+.test-ruler-h, .test-ruler-v { position: absolute; z-index: 5; pointer-events: none; background: rgba(26,35,126,.06); border: 1px solid rgba(26,35,126,.4); font-family: ui-monospace, Consolas, monospace; font-size: 7pt; color: #1a237e; display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; }
+.test-info { position: absolute; z-index: 6; pointer-events: none; font-family: Arial, sans-serif; font-size: 7pt; color: #1a237e; background: rgba(255,255,255,.95); border: 1px solid #1a237e; padding: 1px 4px; border-radius: 2px; line-height: 1.2; }
+.test-area-border { position: absolute; z-index: 4; pointer-events: none; border: 1px dashed #1a237e; }
+
+/* ===== Testes ===== */
+.test-results { margin-top: 8px; font-size: 11.5px; }
+.test-results .item { padding: 3px 6px; border-radius: 3px; margin-bottom: 3px; }
+.test-results .pass { background: #e8f5e9; color: #2e7d32; }
+.test-results .fail { background: #ffebee; color: #c62828; }
+
+@media print {
+  .splash, .header, .sidebar, .sidebar-resizer, .test-results { display: none !important; }
+  #preview > *:not(.page) { display: none !important; }
+  body { background: #fff; overflow: visible; display: block; }
+  .main { display: block; overflow: visible; }
+  .preview-pane { padding: 0; overflow: visible; display: block; }
+  .page { box-shadow: none; margin: 0; page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .label { outline: none; }
+  .margin-box { display: none !important; }
+  .label-content td.active-cell { box-shadow: none; }
+  .label-content td.active-cell::before { display: none; }
+  .label-content td.cell-overflow .cell-inner, .label td.cell-overflow .cell-inner { outline: none; }
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 900px) {
+  html, body { overflow: auto; height: auto; min-height: 100%; }
+  body { display: block; }
+  .main { display: block; height: auto; overflow: visible; }
+  .sidebar { width: auto !important; max-width: none !important; min-width: 0 !important; overflow: visible; }
+  .sidebar.with-preview { width: auto !important; max-width: none !important; }
+  .sidebar-resizer { display: none !important; }
+  .preview-pane { min-height: 70vh; padding: 10px; }
+  .preview-pane.visible { display: block; }
+  .header { padding: 8px 12px; }
+  .header h1 { font-size: 13px; }
+  .header .credit { font-size: 10px; }
+  .panel { padding: 10px 12px; }
+  .panel h2 { font-size: 10px; }
+  .toolbar { padding: 6px; gap: 4px; }
+  .tb-group { flex: 1 1 48%; min-width: 0; }
+  .tb-group-body { gap: 2px; }
+  .tb-btn { font-size: 11px; height: 24px; min-width: 24px; padding: 0 5px; }
+  .tb-group-body .inline { font-size: 10px; }
+  .tb-group-body select, .tb-group-body input[type="number"] { font-size: 10px; height: 24px; }
+  .field input, .field select { font-size: 12px; }
+  .editor-stage { padding: 12px 8px; min-height: 240px; }
+  .editor-caption { font-size: 9.5px; }
+  .align-grid { grid-template-columns: repeat(3, 16px); grid-template-rows: repeat(3, 16px); }
+  .align-grid button { width: 16px; height: 16px; }
+  .lib-item { flex-wrap: wrap; }
+  .lib-item button { flex: 1; }
+}
+
+@media (max-width: 480px) {
+  .tb-group { flex: 1 1 100%; }
+  .field select { min-width: 0; width: 100%; }
+  .row { gap: 6px; }
+  .field input, .field select { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash">
+  <div class="splash-inner">
+    <div class="splash-logo">📇</div>
+    <div class="splash-title">Gerador de Etiquetas</div>
+    <div class="splash-sub">do modelo ao PDF, em poucos cliques</div>
+    <div class="splash-credit">criado por Mateus Bitarães</div>
+    <div class="splash-bar"></div>
+  </div>
+</div>
+
+<div class="header">
+  <h1>📇 Gerador de Etiquetas</h1>
+  <div class="credit">criado por Mateus Bitarães</div>
+</div>
+
+<div class="main">
+  <aside class="sidebar" id="sidebar">
+
+    <section class="panel">
+      <h2>1. Planilha de dados (.xlsx)</h2>
+      <input type="file" id="xlsxFile" accept=".xlsx,.xls">
+      <div class="row" id="sheetPickerRow" style="display:none; margin-top: 8px;">
+        <div class="field">
+          <label>Aba</label>
+          <select id="sheetPicker"></select>
+        </div>
+      </div>
+      <div class="status" id="sheetStatus">Selecione o arquivo…</div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Formato da folha e da etiqueta</h2>
+      <div class="row">
+        <div class="field">
+          <label>Preset (opcional)</label>
+          <select id="preset">
+            <option value="">— escolher —</option>
+            <option value="L7162">Avery L7162 — A4, 2×8, 99,1×33,9 mm</option>
+            <option value="L7159">Avery L7159 — A4, 3×8, 63,5×33,9 mm</option>
+            <option value="L7160">Avery L7160 — A4, 3×7, 63,5×38,1 mm</option>
+            <option value="L7163">Avery L7163 — A4, 2×7, 99,1×38,1 mm</option>
+            <option value="5160">Avery 5160 — Carta, 3×10, 66,7×25,4 mm</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Larg. folha (mm)</label><input type="number" id="pageW" value="210" step="0.1" min="0"></div>
+        <div class="field"><label>Alt. folha (mm)</label><input type="number" id="pageH" value="297" step="0.1" min="0"></div>
+        <div class="field"><label>Larg. etiqueta (mm)</label><input type="number" id="labelW" value="99.1" step="0.1" min="0"></div>
+        <div class="field"><label>Alt. etiqueta (mm)</label><input type="number" id="labelH" value="33.9" step="0.1" min="0"></div>
+        <div class="field"><label>Colunas</label><input type="number" id="cols" value="2" min="1" step="1"></div>
+        <div class="field"><label>Linhas</label><input type="number" id="rows" value="8" min="1" step="1"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Margem topo (mm)</label><input type="number" id="mTop" value="12.9" step="0.1" min="0"></div>
+        <div class="field"><label>Margem esq. (mm)</label><input type="number" id="mLeft" value="4.7" step="0.1" min="0"></div>
+        <div class="field"><label>Espaço horiz. (mm)</label><input type="number" id="gapX" value="2.5" step="0.1" min="0"></div>
+        <div class="field"><label>Espaço vert. (mm)</label><input type="number" id="gapY" value="0" step="0.1" min="0"></div>
+        <div class="field"><label>Fonte base (pt)</label><input type="number" id="labelFont" value="9.5" step="0.5" min="4" max="30"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Modelo da etiqueta</h2>
+      <p class="hint">
+        <b>Fonte base</b> vale para toda a etiqueta; <b>Tam.</b> só altera a seleção.
+        Alças <span class="tag-green">verdes</span>: padding da célula. <kbd>Ctrl</kbd> + arrastar = 4 lados juntos.
+        Alças <span class="tag-blue">azuis</span>: coluna/linha. <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd>.
+        <br><b>Mover tabela:</b> <kbd>Alt</kbd> + arrastar. <b>Bloco</b> aplica à célula ativa (ou à etiqueta inteira).
+        <b>QR/Código:</b> selecione um campo e clique em <span class="tag-orange">QR</span> ou <span class="tag-orange">Código</span>.
+      </p>
+
+      <div class="toolbar" id="toolbar">
+        <div class="tb-group">
+          <div class="tb-group-label">📝 Texto</div>
+          <div class="tb-group-body">
+            <button type="button" class="tb-btn" data-cmd="bold" title="Negrito"><b>B</b></button>
+            <button type="button" class="tb-btn" data-cmd="italic" title="Itálico"><i>I</i></button>
+            <button type="button" class="tb-btn" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+            <span class="sep-v"></span>
+            <label class="inline" title="Tamanho da seleção">Tam.
+              <select id="selFontSize">
+                <option value="">—</option>
+                <option>6</option><option>7</option><option>8</option><option>9</option>
+                <option>10</option><option>11</option><option>12</option><option>14</option>
+                <option>16</option><option>18</option><option>20</option>
+              </select>
+            </label>
+            <label class="inline" title="Cor do texto">Cor
+              <input type="color" id="fontColor" value="#000000">
+            </label>
+            <span class="sep-v"></span>
+            <button type="button" class="tb-btn" data-cmd="justifyLeft" title="Esquerda"><svg viewBox="0 0 14 14" width="14" height="14"><line x1="1" y1="2.5" x2="13" y2="2.5" stroke="currentColor" stroke-width="1.4"/><line x1="1" y1="5.5" x2="9" y2="5.5" stroke="currentColor" stroke-width="1.4"/><line x1="1" y1="8.5" x2="13" y2="8.5" stroke="currentColor" stroke-width="1.4"/><line x1="1" y1="11.5" x2="9" y2="11.5" stroke="currentColor" stroke-width="1.4"/></svg></button>
+            <button type="button" class="tb-btn" data-cmd="justifyCenter" title="Centro"><svg viewBox="0 0 14 14" width="14" height="14"><line x1="1" y1="2.5" x2="13" y2="2.5" stroke="currentColor" stroke-width="1.4"/><line x1="2.5" y1="5.5" x2="11.5" y2="5.5" stroke="currentColor" stroke-width="1.4"/><line x1="1" y1="8.5" x2="13" y2="8.5" stroke="currentColor" stroke-width="1.4"/><line x1="2.5" y1="11.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.4"/></svg></button>
+            <button type="button" class="tb-btn" data-cmd="justifyRight" title="Direita"><svg viewBox="0 0 14 14" width="14" height="14"><line x1="1" y1="2.5" x2="13" y2="2.5" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="5.5" x2="13" y2="5.5" stroke="currentColor" stroke-width="1.4"/><line x1="1" y1="8.5" x2="13" y2="8.5" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="11.5" x2="13" y2="11.5" stroke="currentColor" stroke-width="1.4"/></svg></button>
+            <span class="sep-v"></span>
+            <button type="button" class="tb-btn" id="btnClearFormat" title="Limpar formatação">✗</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">🔲 Célula</div>
+          <div class="tb-group-body">
+            <button type="button" class="tb-btn" data-cellalign="top" title="Topo"><svg viewBox="0 0 14 14" width="14" height="14"><rect x="0.7" y="0.7" width="12.6" height="12.6" fill="none" stroke="currentColor" stroke-width="0.8"/><rect x="3" y="2.4" width="8" height="2.2" fill="currentColor"/><line x1="4" y1="6.6" x2="10" y2="6.6" stroke="currentColor" stroke-width="1"/><line x1="4" y1="9" x2="10" y2="9" stroke="currentColor" stroke-width="1"/></svg></button>
+            <button type="button" class="tb-btn" data-cellalign="middle" title="Meio"><svg viewBox="0 0 14 14" width="14" height="14"><rect x="0.7" y="0.7" width="12.6" height="12.6" fill="none" stroke="currentColor" stroke-width="0.8"/><rect x="3" y="5.9" width="8" height="2.2" fill="currentColor"/><line x1="4" y1="4" x2="10" y2="4" stroke="currentColor" stroke-width="1"/><line x1="4" y1="10" x2="10" y2="10" stroke="currentColor" stroke-width="1"/></svg></button>
+            <button type="button" class="tb-btn" data-cellalign="bottom" title="Base"><svg viewBox="0 0 14 14" width="14" height="14"><rect x="0.7" y="0.7" width="12.6" height="12.6" fill="none" stroke="currentColor" stroke-width="0.8"/><rect x="3" y="9.4" width="8" height="2.2" fill="currentColor"/><line x1="4" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1"/><line x1="4" y1="7.4" x2="10" y2="7.4" stroke="currentColor" stroke-width="1"/></svg></button>
+            <span class="sep-v"></span>
+            <label class="inline" title="Largura da coluna (px)">Larg.<input type="number" id="colWidth" min="10" step="1" style="width:50px"></label>
+            <label class="inline" title="Altura da linha (px)">Alt.<input type="number" id="rowHeight" min="10" step="1" style="width:50px"></label>
+            <span class="sep-v"></span>
+            <label class="inline" title="Padding topo (px)">P.T<input type="number" id="padTop" min="0" step="1" style="width:44px"></label>
+            <label class="inline" title="Padding direita (px)">P.R<input type="number" id="padRight" min="0" step="1" style="width:44px"></label>
+            <label class="inline" title="Padding base (px)">P.B<input type="number" id="padBottom" min="0" step="1" style="width:44px"></label>
+            <label class="inline" title="Padding esquerda (px)">P.L<input type="number" id="padLeft" min="0" step="1" style="width:44px"></label>
+            <button type="button" class="tb-btn" id="btnEqualize" title="Igualar os 4 paddings ao P.T">⬜</button>
+            <button type="button" class="tb-btn" id="btnAutoFit" title="Auto-ajustar conteúdo da célula ativa">⤢ Ajustar</button>
+            <button type="button" class="tb-btn" id="btnAutoFitReset" title="Restaurar o estado anterior ao auto-ajuste">↺</button>
+            <span class="sep-v"></span>
+            <button type="button" class="tb-btn" id="btnMergeRight" title="Mesclar com a célula à direita">→|←</button>
+            <button type="button" class="tb-btn" id="btnMergeDown" title="Mesclar com a célula abaixo">↑↓</button>
+            <button type="button" class="tb-btn" id="btnUnmerge" title="Desmesclar">↔</button>
+            <button type="button" class="tb-btn" id="btnDupRow" title="Duplicar linha">⧉↓</button>
+            <button type="button" class="tb-btn" id="btnDupCol" title="Duplicar coluna">⧉→</button>
+            <button type="button" class="tb-btn" id="btnClearCell" title="Apagar conteúdo da célula">🗑</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">⊞ Tabela</div>
+          <div class="tb-group-body">
+            <button type="button" class="tb-btn" id="btnTable" title="Inserir tabela">⊞ Inserir</button>
+            <button type="button" class="tb-btn" id="btnBorders" title="Ligar/desligar bordas">🔲 Bordas</button>
+            <label class="inline" title="Cor das bordas">Cor<input type="color" id="borderColor" value="#000000"></label>
+            <span class="sep-v"></span>
+            <button type="button" class="tb-btn" id="btnDelRow" title="Apagar linha">🗑 Linha</button>
+            <button type="button" class="tb-btn" id="btnDelCol" title="Apagar coluna">🗑 Col.</button>
+            <button type="button" class="tb-btn" id="btnDelTable" title="Apagar tabela">🗑 Tabela</button>
+            <button type="button" class="tb-btn" id="btnResetPos" title="Resetar posição">⟲ Posição</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">📦 Bloco</div>
+          <div class="tb-group-body">
+            <div class="align-grid" id="alignGrid">
+              <button type="button" data-pos="tl" title="Topo esquerdo"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="3" cy="3" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="tc" title="Topo centro"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="6" cy="3" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="tr" title="Topo direito"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="9" cy="3" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="ml" title="Meio esquerdo"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="3" cy="6" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="mc" title="Meio centro"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="6" cy="6" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="mr" title="Meio direito"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="9" cy="6" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="bl" title="Base esquerda"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="3" cy="9" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="bc" title="Base centro"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="6" cy="9" r="1.3" fill="currentColor"/></svg></button>
+              <button type="button" data-pos="br" title="Base direita"><svg viewBox="0 0 12 12" width="12" height="12"><rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="0.8"/><circle cx="9" cy="9" r="1.3" fill="currentColor"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">➕ Inserir</div>
+          <div class="tb-group-body">
+            <select id="selField" title="Campo da planilha" style="min-width:110px"><option value="">— carregue a planilha —</option></select>
+            <button type="button" class="tb-btn" id="btnInsertField" disabled title="Inserir campo">+</button>
+            <button type="button" class="tb-btn" id="btnQR" disabled title="Inserir QR Code">QR</button>
+            <button type="button" class="tb-btn" id="btnBarcode" disabled title="Inserir código de barras (Code128)">Código</button>
+            <button type="button" class="tb-btn" id="btnImage" title="Inserir imagem">🖼 Imagem</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">↩ Histórico</div>
+          <div class="tb-group-body">
+            <button type="button" class="tb-btn" id="btnUndo" title="Desfazer (Ctrl+Z)">↶</button>
+            <button type="button" class="tb-btn" id="btnRedo" title="Refazer (Ctrl+Y)">↷</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-group-label">🔍 Exibir</div>
+          <div class="tb-group-body">
+            <label class="inline">Zoom
+              <select id="zoomSelect">
+                <option value="0.75">75%</option>
+                <option value="1" selected>100%</option>
+                <option value="1.5">150%</option>
+                <option value="2">200%</option>
+                <option value="2.5">250%</option>
+                <option value="3">300%</option>
+              </select>
+            </label>
+            <span class="sep-v"></span>
+            <button type="button" class="tb-btn" id="btnSaveTpl" title="Salvar modelo como JSON">💾 JSON</button>
+            <button type="button" class="tb-btn" id="btnLoadTpl" title="Carregar modelo de um JSON">📂 JSON</button>
+            <button type="button" class="tb-btn" id="btnRunTests" title="Executar bateria de testes das operações de tabela">🧪 Testes</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="editor-stage" id="editorStage">
+        <div class="label-zoom-frame" id="zoomFrame">
+          <div class="label-outline" id="labelOutline">
+            <div class="label-content" id="editor" contenteditable="true" spellcheck="false"></div>
+          </div>
+        </div>
+        <div class="editor-caption" id="editorCaption" title="Duplo clique alterna 100% ↔ 200%">
+          Etiqueta: 99,1 × 33,9 mm · Zoom 100%
+        </div>
+      </div>
+
+      <div class="test-results" id="testResults" style="display:none;"></div>
+      <div class="status" id="fieldsInfo"></div>
+      <input type="file" id="imgFile" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none">
+      <input type="file" id="tplFile" accept=".json,application/json" style="display:none">
+    </section>
+
+    <section class="panel">
+      <h2>4. Biblioteca de modelos</h2>
+      <div class="row">
+        <div class="field" style="flex:1; min-width:160px;">
+          <label>Nome do modelo</label>
+          <input type="text" id="libName" placeholder="Ex: Patrimônio" style="width:100%">
+        </div>
+        <button id="btnLibSave" class="primary" title="Salvar o modelo atual na biblioteca">💾 Salvar atual</button>
+      </div>
+      <div class="lib-list" id="libList"></div>
+    </section>
+
+    <section class="panel">
+      <h2>5. Gerar</h2>
+      <button id="genBtn" class="primary" disabled>Gerar pré-visualização</button>
+      <button id="testBtn" class="primary test" disabled title="Gera uma folha de calibração com as 2 primeiras etiquetas">🧪 Folha de teste</button>
+      <button id="printBtn" class="primary print" style="display:none">🖨️ Imprimir / Salvar PDF</button>
+      <div class="status" id="status"></div>
+    </section>
+
+  </aside>
+
+  <div class="sidebar-resizer" id="sidebarResizer" title="Arraste para redimensionar"></div>
+
+  <section class="preview-pane" id="previewPane">
+    <div id="preview"></div>
+  </section>
+</div>
+
+<style id="pageSizeStyle"></style>
+
+<script>
+const $ = id => document.getElementById(id);
+const editor       = $('editor');
+const labelOutline = $('labelOutline');
+const editorStage  = $('editorStage');
+const sidebar      = $('sidebar');
+const sidebarResizer = $('sidebarResizer');
+
+let headers = null;
+let rows    = null;
+let bordersOn = false;
+let zoom    = 1;
+let activeCell = null;
+let currentWorkbook = null;
+
+/* ============ Splash ============ */
+setTimeout(() => {
+  const s = $('splash');
+  if (!s) return;
+  s.classList.add('fade-out');
+  setTimeout(() => s.remove(), 650);
+}, 1200);
+
+/* ============ Sanitização ============ */
+const DROP_ENTIRELY = new Set(['SCRIPT','IFRAME','OBJECT','EMBED','LINK','META','STYLE','BASE','FORM','INPUT','BUTTON','TEXTAREA','SELECT']);
+const ALLOWED_TAGS = new Set([
+  'TABLE','TBODY','THEAD','TFOOT','TR','TD','TH',
+  'DIV','SPAN','P','BR','HR','B','STRONG','I','EM','U','S','FONT','A',
+  'UL','OL','LI','SUB','SUP','IMG','SVG','PATH','RECT','LINE','CIRCLE','G','SMALL','CODE','PRE'
+]);
+const ALLOWED_ATTRS = new Set([
+  'class','style','width','height','colspan','rowspan','align','valign',
+  'data-field','data-type','src','alt','title','dir','lang','viewBox','xmlns','d','fill','stroke','stroke-width'
+]);
+function sanitizeHTML(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  function walk(node) {
+    if (node.nodeType === 3) return;
+    if (node.nodeType !== 1) { node.remove(); return; }
+    if (DROP_ENTIRELY.has(node.tagName)) { node.remove(); return; }
+    if (!ALLOWED_TAGS.has(node.tagName)) {
+      const parent = node.parentNode;
+      while (node.firstChild) parent.insertBefore(node.firstChild, node);
+      node.remove(); return;
+    }
+    for (const attr of Array.from(node.attributes)) {
+      const name = attr.name.toLowerCase();
+      const val  = attr.value;
+      if (name.startsWith('on') || !ALLOWED_ATTRS.has(name)) { node.removeAttribute(attr.name); continue; }
+      if ((name === 'src') && /^\s*(javascript|data:text\/html)/i.test(val)) node.removeAttribute(attr.name);
+      if (name === 'style' && /expression\s*\(|javascript:/i.test(val)) node.removeAttribute('style');
+    }
+    Array.from(node.children).forEach(walk);
+  }
+  Array.from(tpl.content.children).forEach(walk);
+  return tpl.innerHTML;
+}
+
+/* ============ Bloco do editor ============ */
+function getEditorBlock() {
+  return {
+    justifyContent: editor.style.justifyContent || '',
+    alignItems:     editor.style.alignItems || '',
+    textAlign:      editor.style.textAlign || ''
+  };
+}
+function applyEditorBlock(block) {
+  if (!block) return;
+  editor.style.justifyContent = block.justifyContent || '';
+  editor.style.alignItems     = block.alignItems || '';
+  editor.style.textAlign      = block.textAlign || '';
+  updateBlockButtons();
+}
+
+/* ============ Histórico ============ */
+let history = [];
+let histIndex = -1;
+let histTimer = null;
+function snapshot() {
+  return {
+    html: editor.innerHTML,
+    bordersOn: bordersOn,
+    editorBlock: getEditorBlock(),
+    editorStyle: { fontSize: editor.style.fontSize || '' }
+  };
+}
+function restoreSnapshot(snap) {
+  if (!snap) return;
+  editor.innerHTML = snap.html || '';
+  bordersOn = !!snap.bordersOn;
+  const bB = $('btnBorders'); if (bB) bB.classList.toggle('active', bordersOn);
+  if (snap.editorStyle) editor.style.fontSize = snap.editorStyle.fontSize || (($('labelFont').value || 9.5) + 'pt');
+  applyEditorBlock(snap.editorBlock || {});
+  setActiveCell(null); hidePadHandles();
+  checkOverflow(); updateFieldsInfo();
+}
+function pushHistory() {
+  const snap = snapshot();
+  const prev = history[histIndex];
+  if (prev &&
+      prev.html === snap.html &&
+      prev.bordersOn === snap.bordersOn &&
+      JSON.stringify(prev.editorBlock || {}) === JSON.stringify(snap.editorBlock || {})) return;
+  history = history.slice(0, histIndex + 1);
+  history.push(snap);
+  if (history.length > 200) history.shift();
+  histIndex = history.length - 1;
+}
+function pushHistoryDebounced() { clearTimeout(histTimer); histTimer = setTimeout(pushHistory, 400); }
+function undo() { if (histIndex <= 0) return; histIndex--; restoreSnapshot(history[histIndex]); }
+function redo() { if (histIndex >= history.length - 1) return; histIndex++; restoreSnapshot(history[histIndex]); }
+pushHistory();
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+});
+$('btnUndo').addEventListener('click', undo);
+$('btnRedo').addEventListener('click', redo);
+
+/* ============ Presets ============ */
+const PRESETS = {
+  L7162: { pageW:210, pageH:297, labelW:99.1, labelH:33.9, cols:2, rows:8, mTop:12.9, mLeft:4.7, gapX:2.5, gapY:0 },
+  L7159: { pageW:210, pageH:297, labelW:63.5, labelH:33.9, cols:3, rows:8, mTop:12.9, mLeft:7.0, gapX:2.5, gapY:0 },
+  L7160: { pageW:210, pageH:297, labelW:63.5, labelH:38.1, cols:3, rows:7, mTop:15.1, mLeft:7.0, gapX:2.5, gapY:0 },
+  L7163: { pageW:210, pageH:297, labelW:99.1, labelH:38.1, cols:2, rows:7, mTop:15.1, mLeft:4.7, gapX:2.5, gapY:0 },
+  '5160': { pageW:216, pageH:279, labelW:66.7, labelH:25.4, cols:3, rows:10, mTop:12.7, mLeft:4.7, gapX:3.1, gapY:0 }
+};
+const escRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escHtml   = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+/* ============ QR / Barcode ============ */
+function generateQRSVG(value) {
+  if (typeof qrcode === 'undefined') return '';
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(String(value));
+    qr.make();
+    const svg = qr.createSvgTag({ cellSize: 2, margin: 1 });
+    return svg.replace('<svg ', '<svg style="max-width:100%;height:auto;vertical-align:middle;" ');
+  } catch (e) { return ''; }
+}
+function generateBarcodeSVG(value) {
+  if (typeof JsBarcode === 'undefined') return '';
+  try {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    JsBarcode(svg, String(value), { format: 'CODE128', width: 1, height: 40, displayValue: false, margin: 0 });
+    svg.setAttribute('style', 'max-width:100%;height:auto;vertical-align:middle;');
+    return new XMLSerializer().serializeToString(svg);
+  } catch (e) { return ''; }
+}
+
+/* ============ Campos / preenchimento ============ */
+function detectFields(html) {
+  const nomes = new Set();
+  for (const m of html.matchAll(/data-field="([^"]+)"/g)) nomes.add(m[1].trim());
+  for (const m of html.matchAll(/<<\s*([^<>]+?)\s*>>/g))     nomes.add(m[1].trim());
+  return [...nomes];
+}
+function fillTemplate(tpl, headers, row) {
+  let html = tpl.replace(/<span[^>]*data-field="([^"]+)"[^>]*>([\s\S]*?)<\/span>/g,
+    (whole, nome) => {
+      const typeMatch = whole.match(/data-type="([^"]+)"/);
+      const tipo = typeMatch ? typeMatch[1] : 'text';
+      const idx = headers.findIndex(h => h.toLowerCase() === nome.toLowerCase());
+      if (idx === -1) return '';
+      const val = row[idx] == null ? '' : String(row[idx]);
+      if (tipo === 'qr')      return val ? generateQRSVG(val) : '';
+      if (tipo === 'barcode') return val ? generateBarcodeSVG(val) : '';
+      return escHtml(val);
+    });
+  headers.forEach((h, i) => {
+    const val = (row[i] == null) ? '' : String(row[i]);
+    html = html.replace(new RegExp('<<\\s*' + escRegExp(h) + '\\s*>>', 'gi'), escHtml(val));
+  });
+  return html;
+}
+function updateFieldsInfo() {
+  const campos = detectFields(editor.innerHTML);
+  if (!headers || !headers.length) { $('fieldsInfo').textContent = 'ℹ️ Carregue a planilha para habilitar a inserção de campos.'; return; }
+  $('fieldsInfo').textContent = campos.length
+    ? '✓ Campos no modelo: ' + campos.join(', ')
+    : 'ℹ️ Nenhum campo no modelo. Use “Inserir → +”.';
+}
+
+function updateEditorSize() {
+  const w = parseFloat($('labelW').value) || 99.1;
+  const h = parseFloat($('labelH').value) || 33.9;
+  document.documentElement.style.setProperty('--lw', w);
+  document.documentElement.style.setProperty('--lh', h);
+  updateCaption(); requestAnimationFrame(() => { checkOverflow(); refreshPadHandles(); });
+}
+function updateCaption() {
+  const w = parseFloat($('labelW').value) || 99.1;
+  const h = parseFloat($('labelH').value) || 33.9;
+  $('editorCaption').textContent = `Etiqueta: ${w.toFixed(1).replace('.', ',')} × ${h.toFixed(1).replace('.', ',')} mm · Zoom ${Math.round(zoom*100)}%`;
+}
+function setZoom(z) {
+  zoom = z; document.documentElement.style.setProperty('--zoom', z);
+  $('zoomSelect').value = String(z);
+  try { localStorage.setItem('etq_zoom', String(z)); } catch(_) {}
+  updateCaption(); requestAnimationFrame(() => { checkOverflow(); refreshPadHandles(); });
+}
+function checkOverflow() {
+  labelOutline.classList.toggle('overflow', editor.scrollHeight > editor.clientHeight + 1);
+}
+
+/* ============ Bloco ============ */
+function applyBlockPositionToTarget(target, pos) {
+  if (!target) return;
+  const v = pos[0], h = pos[1];
+  target.style.justifyContent = v === 't' ? 'flex-start' : v === 'm' ? 'center' : 'flex-end';
+  target.style.alignItems     = h === 'l' ? 'flex-start' : h === 'c' ? 'center' : 'flex-end';
+  target.style.textAlign      = h === 'l' ? 'left' : h === 'c' ? 'center' : 'right';
+}
+function applyBlockPosition(pos) {
+  const cell = getActiveCell();
+  const target = cell ? cell.querySelector('.cell-inner') : editor;
+  if (!target) return;
+  applyBlockPositionToTarget(target, pos);
+  target.dataset.blockPos = pos;
+  updateBlockButtons();
+  checkOverflow();
+  if (cell) checkCellOverflow(cell);
+  pushHistory();
+}
+function updateBlockButtons() {
+  const cell = getActiveCell();
+  const target = cell ? cell.querySelector('.cell-inner') : editor;
+  let pos;
+  if (!cell) {
+    const jc = editor.style.justifyContent;
+    const ai = editor.style.alignItems;
+    const v = jc === 'center' ? 'm' : jc === 'flex-end' ? 'b' : 't';
+    const h = ai === 'center' ? 'c' : ai === 'flex-end' ? 'r' : 'l';
+    pos = v + h;
+  } else {
+    pos = (target && target.dataset && target.dataset.blockPos) || 'tl';
+  }
+  document.querySelectorAll('#alignGrid button').forEach(b =>
+    b.classList.toggle('active', b.dataset.pos === pos));
+}
+applyBlockPositionToTarget(editor, 'tl');
+document.querySelectorAll('#alignGrid button').forEach(btn => {
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.addEventListener('click', () => applyBlockPosition(btn.dataset.pos));
+});
+updateBlockButtons();
+
+/* ============ Célula ativa ============ */
+function cellOf(node) {
+  while (node && node !== editor) {
+    if (node.nodeType === 1 && (node.tagName === 'TD' || node.tagName === 'TH')) return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+function getActiveCell() {
+  if (activeCell && editor.contains(activeCell)) return activeCell;
+  const sel = window.getSelection();
+  const node = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+  return cellOf(node);
+}
+function setActiveCell(cell) {
+  editor.querySelectorAll('td.active-cell, th.active-cell').forEach(c => c.classList.remove('active-cell'));
+  activeCell = cell;
+  if (cell) cell.classList.add('active-cell');
+  updateCellAlignButtons(cell);
+  updateCellPaddingInputs(cell);
+  updateCellSizeInputs(cell);
+  if (cell) placePadHandles(cell); else hidePadHandles();
+  checkCellOverflow(cell);
+  updateBlockButtons();
+}
+function updateCellAlignButtons(cell) {
+  let align = null;
+  if (cell) {
+    align = cell.classList.contains('cell-mid') ? 'middle' :
+            cell.classList.contains('cell-bot') ? 'bottom' : 'top';
+  }
+  document.querySelectorAll('[data-cellalign]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cellalign === align);
+  });
+}
+function updateCellPaddingInputs(cell) {
+  if (!cell) { ['padTop','padRight','padBottom','padLeft'].forEach(id => $(id).value = ''); return; }
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  const cs = getComputedStyle(inner);
+  $('padTop').value    = parseInt(cs.paddingTop)    || 0;
+  $('padRight').value  = parseInt(cs.paddingRight)  || 0;
+  $('padBottom').value = parseInt(cs.paddingBottom) || 0;
+  $('padLeft').value   = parseInt(cs.paddingLeft)   || 0;
+}
+function updateCellSizeInputs(cell) {
+  if (!cell) { $('colWidth').value = ''; $('rowHeight').value = ''; return; }
+  $('colWidth').value  = Math.round(cell.offsetWidth);
+  $('rowHeight').value = Math.round(cell.offsetHeight);
+}
+function checkCellOverflow(cell) {
+  if (!cell) return;
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  const avail = inner.clientHeight;
+  const used  = inner.scrollHeight;
+  const over  = used > avail + 1;
+  inner.classList.toggle('cell-overflow', over);
+  if (over && cell === activeCell) {
+    $('fieldsInfo').textContent =
+      `⚠️ O conteúdo desta célula (${used}px) é maior que o espaço interno (${avail}px). ` +
+      `Use “⤢ Ajustar” ou reduza P.T/P.B.`;
+  } else if (cell === activeCell) {
+    setTimeout(() => { if (activeCell === cell) updateFieldsInfo(); }, 0);
+  }
+}
+editor.addEventListener('click', e => {
+  const cell = e.target.closest && e.target.closest('td, th');
+  if (cell && editor.contains(cell)) setActiveCell(cell);
+  else if (!(e.target.closest && e.target.closest('table'))) setActiveCell(null);
+});
+
+function applyCellAlign(cell, align) {
+  if (!cell) return;
+  cell.classList.remove('cell-top', 'cell-mid', 'cell-bot');
+  cell.classList.add(align === 'top' ? 'cell-top' : align === 'middle' ? 'cell-mid' : 'cell-bot');
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  Array.from(inner.children).forEach(ch => { ch.style.marginTop = ''; ch.style.marginBottom = ''; });
+  const kids = Array.from(inner.children); if (!kids.length) return;
+  const first = kids[0]; const last = kids[kids.length - 1];
+  if (align === 'top') last.style.marginBottom = 'auto';
+  else if (align === 'middle') { first.style.marginTop = 'auto'; last.style.marginBottom = 'auto'; }
+  else first.style.marginTop = 'auto';
+  checkCellOverflow(cell);
+}
+
+/* ============ Auto-ajuste ============ */
+function captureAutofitBase(cell) {
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return null;
+  if (!inner.dataset.autofitBase) {
+    inner.dataset.autofitBase = JSON.stringify({
+      fontSize: inner.style.fontSize || '',
+      paddingTop: inner.style.paddingTop || '',
+      paddingBottom: inner.style.paddingBottom || ''
+    });
+  }
+  return JSON.parse(inner.dataset.autofitBase);
+}
+function restoreAutofitBase(cell) {
+  const inner = cell.querySelector('.cell-inner');
+  if (!inner || !inner.dataset.autofitBase) return false;
+  try {
+    const base = JSON.parse(inner.dataset.autofitBase);
+    inner.style.fontSize = base.fontSize || '';
+    inner.style.paddingTop = base.paddingTop || '';
+    inner.style.paddingBottom = base.paddingBottom || '';
+    return true;
+  } catch(_) { return false; }
+}
+function clearAutofitBase(cell) {
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  delete inner.dataset.autofitBase;
+  inner.style.fontSize = ''; inner.style.paddingTop = ''; inner.style.paddingBottom = '';
+}
+function autoFitCell(cell) {
+  if (!cell) return false;
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return false;
+  restoreAutofitBase(cell);
+  const isOverflow = () => inner.scrollHeight > inner.clientHeight + 1;
+  if (!isOverflow()) return false;
+  captureAutofitBase(cell);
+  const initialFs = parseFloat(getComputedStyle(inner).fontSize) || (9.5 * 96 / 72);
+  let fs = initialFs;
+  const minFs = 6 * 96 / 72;
+  for (let i = 0; i < 60; i++) {
+    if (!isOverflow()) break;
+    fs -= 0.5; if (fs < minFs) fs = minFs;
+    inner.style.fontSize = fs + 'px';
+    if (fs <= minFs) break;
+  }
+  if (isOverflow()) {
+    const cs = getComputedStyle(inner);
+    let pt = parseFloat(cs.paddingTop) || 0;
+    let pb = parseFloat(cs.paddingBottom) || 0;
+    for (let i = 0; i < 60; i++) {
+      if (!isOverflow()) break;
+      if (pt <= 0 && pb <= 0) break;
+      pt = Math.max(0, pt - 1); pb = Math.max(0, pb - 1);
+      inner.style.paddingTop = pt + 'px'; inner.style.paddingBottom = pb + 'px';
+    }
+  }
+  updateCellPaddingInputs(cell);
+  checkCellOverflow(cell);
+  placePadHandles(cell);
+  return true;
+}
+$('btnAutoFit').addEventListener('mousedown', e => e.preventDefault());
+$('btnAutoFit').addEventListener('click', () => {
+  const cell = getActiveCell();
+  if (!cell) { alert('Selecione uma célula primeiro.'); return; }
+  const changed = autoFitCell(cell);
+  pushHistory();
+  $('fieldsInfo').textContent = changed ? '✓ Auto-ajuste aplicado.' : 'ℹ️ O conteúdo já cabe.';
+});
+$('btnAutoFitReset').addEventListener('mousedown', e => e.preventDefault());
+$('btnAutoFitReset').addEventListener('click', () => {
+  const cell = getActiveCell();
+  if (!cell) { alert('Selecione uma célula primeiro.'); return; }
+  const restored = restoreAutofitBase(cell);
+  clearAutofitBase(cell);
+  pushHistory();
+  updateCellPaddingInputs(cell); checkCellOverflow(cell); placePadHandles(cell);
+  $('fieldsInfo').textContent = restored ? '✓ Estado original restaurado.' : 'ℹ️ Nada a restaurar.';
+});
+
+/* ============ Alças verdes (padding) ============ */
+let dragPadState = null;
+function refreshPadHandles() {
+  if (activeCell && editor.contains(activeCell) && !dragState) placePadHandles(activeCell);
+  else hidePadHandles();
+}
+function placePadHandles(cell) {
+  if (!cell || !editor.contains(cell)) { hidePadHandles(); return; }
+  const inner = cell.querySelector('.cell-inner'); if (!inner) { hidePadHandles(); return; }
+  const stageRect = editorStage.getBoundingClientRect();
+  const innerRect = inner.getBoundingClientRect();
+  const refLeft = stageRect.left + editorStage.clientLeft;
+  const refTop  = stageRect.top  + editorStage.clientTop;
+  const cs = getComputedStyle(inner);
+  const pt = (parseFloat(cs.paddingTop)    || 0) * zoom;
+  const pr = (parseFloat(cs.paddingRight)  || 0) * zoom;
+  const pb = (parseFloat(cs.paddingBottom) || 0) * zoom;
+  const pl = (parseFloat(cs.paddingLeft)   || 0) * zoom;
+  const iL = innerRect.left - refLeft, iT = innerRect.top - refTop;
+  const iW = innerRect.width, iH = innerRect.height;
+  const cL = iL + pl, cT = iT + pt, cR = iL + iW - pr, cB = iT + iH - pb;
+  const hT = $('padHandleTop'), hR = $('padHandleRight'), hB = $('padHandleBottom'), hL = $('padHandleLeft');
+  hT.style.display = 'block'; hT.style.left = cL + 'px'; hT.style.top = (cT - 5) + 'px'; hT.style.width = Math.max(6, cR - cL) + 'px';
+  hB.style.display = 'block'; hB.style.left = cL + 'px'; hB.style.top = (cB - 5) + 'px'; hB.style.width = Math.max(6, cR - cL) + 'px';
+  hL.style.display = 'block'; hL.style.left = (cL - 5) + 'px'; hL.style.top = cT + 'px'; hL.style.height = Math.max(6, cB - cT) + 'px';
+  hR.style.display = 'block'; hR.style.left = (cR - 5) + 'px'; hR.style.top = cT + 'px'; hR.style.height = Math.max(6, cB - cT) + 'px';
+}
+function hidePadHandles() {
+  ['padHandleTop','padHandleRight','padHandleBottom','padHandleLeft'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+}
+function startPadDrag(side, e) {
+  e.preventDefault(); e.stopPropagation();
+  const cell = getActiveCell(); if (!cell) return;
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  const propMap = { top:'paddingTop', right:'paddingRight', bottom:'paddingBottom', left:'paddingLeft' };
+  const cs = getComputedStyle(inner);
+  dragPadState = {
+    cell, inner, side, prop: propMap[side],
+    startPadding: parseFloat(cs[propMap[side]]) || 0,
+    startPaddings: {
+      top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0,
+      bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0
+    },
+    startX: e.clientX, startY: e.clientY,
+    symmetric: !!(e.ctrlKey || e.metaKey)
+  };
+  const handle = $('padHandle' + side.charAt(0).toUpperCase() + side.slice(1));
+  if (handle) handle.classList.add('active');
+  document.body.style.cursor = (side === 'top' || side === 'bottom') ? 'ns-resize' : 'ew-resize';
+  document.body.style.userSelect = 'none';
+  hideHandles();
+}
+function movePadDrag(e) {
+  if (!dragPadState) return;
+  e.preventDefault();
+  const { cell, inner, side, prop, startPadding, startX, startY, symmetric, startPaddings } = dragPadState;
+  let delta = 0;
+  if (side === 'top')    delta =  (e.clientY - startY);
+  if (side === 'bottom') delta = -(e.clientY - startY);
+  if (side === 'left')   delta =  (e.clientX - startX);
+  if (side === 'right')  delta = -(e.clientX - startX);
+  const inputMap = { top:'padTop', right:'padRight', bottom:'padBottom', left:'padLeft' };
+  const propMap  = { top:'paddingTop', right:'paddingRight', bottom:'paddingBottom', left:'paddingLeft' };
+  if (symmetric) {
+    ['top','right','bottom','left'].forEach(s => {
+      const newVal = Math.max(0, startPaddings[s] + delta / zoom);
+      inner.style[propMap[s]] = newVal + 'px';
+      $(inputMap[s]).value = Math.round(newVal);
+    });
+  } else {
+    const newPad = Math.max(0, startPadding + delta / zoom);
+    inner.style[prop] = newPad + 'px';
+    $(inputMap[side]).value = Math.round(newPad);
+  }
+  placePadHandles(cell); checkOverflow(); checkCellOverflow(cell);
+}
+function endPadDrag() {
+  if (!dragPadState) return;
+  document.querySelectorAll('.pad-handle').forEach(h => h.classList.remove('active'));
+  document.body.style.cursor = ''; document.body.style.userSelect = '';
+  dragPadState = null;
+  pushHistory(); refreshPadHandles();
+}
+{
+  const layer = document.createElement('div');
+  layer.id = 'handleLayer';
+  layer.innerHTML =
+    '<div id="padHandleTop"    class="pad-handle pad-handle-t" title="Ajustar margem superior (Ctrl = todas)"></div>' +
+    '<div id="padHandleRight"  class="pad-handle pad-handle-r" title="Ajustar margem direita (Ctrl = todas)"></div>' +
+    '<div id="padHandleBottom" class="pad-handle pad-handle-b" title="Ajustar margem inferior (Ctrl = todas)"></div>' +
+    '<div id="padHandleLeft"   class="pad-handle pad-handle-l" title="Ajustar margem esquerda (Ctrl = todas)"></div>' +
+    '<div id="colResizer" class="resizer col-resizer"></div>' +
+    '<div id="rowResizer" class="resizer row-resizer"></div>';
+  editorStage.appendChild(layer);
+  ['padHandleTop','padHandleRight','padHandleBottom','padHandleLeft'].forEach(id => {
+    $(id).addEventListener('pointerdown', e => {
+      const side = id.replace('padHandle','').toLowerCase();
+      startPadDrag(side, e);
+    });
+  });
+}
+document.addEventListener('pointermove', movePadDrag);
+document.addEventListener('pointerup', endPadDrag);
+document.addEventListener('pointercancel', endPadDrag);
+
+/* ============ Igualar paddings ============ */
+$('btnEqualize').addEventListener('mousedown', e => e.preventDefault());
+$('btnEqualize').addEventListener('click', () => {
+  const cell = getActiveCell(); if (!cell) return;
+  const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+  const v = Math.max(0, parseInt($('padTop').value, 10) || 0);
+  inner.style.paddingTop = v + 'px'; inner.style.paddingRight = v + 'px';
+  inner.style.paddingBottom = v + 'px'; inner.style.paddingLeft = v + 'px';
+  $('padRight').value = v; $('padBottom').value = v; $('padLeft').value = v;
+  pushHistory(); checkOverflow(); placePadHandles(cell); checkCellOverflow(cell);
+});
+
+/* ============ Alinhamento vertical ============ */
+document.querySelectorAll('[data-cellalign]').forEach(btn => {
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.addEventListener('click', () => {
+    const align = btn.dataset.cellalign;
+    const td = getActiveCell();
+    const cells = td ? [td] : [...editor.querySelectorAll('td, th')];
+    if (!cells.length) return;
+    cells.forEach(c => applyCellAlign(c, align));
+    updateCellAlignButtons(cells[0]);
+    pushHistory();
+  });
+});
+
+/* ============ Padding via inputs ============ */
+[['padTop','paddingTop'],['padRight','paddingRight'],['padBottom','paddingBottom'],['padLeft','paddingLeft']].forEach(([id, prop]) => {
+  $(id).addEventListener('change', () => {
+    const cell = getActiveCell(); if (!cell) return;
+    const inner = cell.querySelector('.cell-inner'); if (!inner) return;
+    const v = Math.max(0, parseInt($(id).value, 10) || 0);
+    inner.style[prop] = v + 'px';
+    pushHistory(); checkOverflow(); placePadHandles(cell); checkCellOverflow(cell);
+  });
+});
+
+/* ============ Largura / altura exatas ============ */
+$('colWidth').addEventListener('change', () => {
+  const cell = getActiveCell(); if (!cell) return;
+  const w = parseFloat($('colWidth').value); if (!(w > 0)) return;
+  const table = cell.closest('table');
+  if (table && table.style.tableLayout !== 'fixed') {
+    table.style.tableLayout = 'fixed';
+    table.style.width = table.offsetWidth + 'px';
+  }
+  cell.style.width = w + 'px'; cell.style.minWidth = w + 'px'; cell.style.boxSizing = 'border-box';
+  pushHistory(); checkOverflow(); placePadHandles(cell); checkCellOverflow(cell);
+});
+$('rowHeight').addEventListener('change', () => {
+  const cell = getActiveCell(); if (!cell) return;
+  const h = parseFloat($('rowHeight').value); if (!(h > 0)) return;
+  const row = cell.parentElement;
+  row.style.height = h + 'px';
+  Array.from(row.children).forEach(c => { c.style.height = h + 'px'; c.style.boxSizing = 'border-box'; });
+  pushHistory(); checkOverflow(); placePadHandles(cell); checkCellOverflow(cell);
+});
+
+/* =========================================================
+   MOTOR DE TABELAS (grade lógica determinística)
+   ========================================================= */
+function buildMatrix(table) {
+  const rows = table.rows.length;
+  let maxCol = 0;
+  for (const tr of table.rows) {
+    let w = 0;
+    for (const td of tr.children) w += td.colSpan || 1;
+    maxCol = Math.max(maxCol, w);
+  }
+  const matrix = [];
+  for (let r = 0; r < rows; r++) matrix[r] = Array(maxCol).fill(null);
+  const cells = [];
+  for (let r = 0; r < rows; r++) {
+    const tr = table.rows[r];
+    let c = 0;
+    for (const td of tr.children) {
+      while (matrix[r][c]) c++;
+      const rowSpan = td.rowSpan || 1;
+      const colSpan = td.colSpan || 1;
+      const cell = {
+        row: r, col: c, rowSpan, colSpan,
+        dom: td,
+        data: {
+          tag: td.tagName.toLowerCase(),
+          className: td.className || '',
+          styleAttr: td.getAttribute('style') || '',
+          html: td.innerHTML
+        }
+      };
+      cells.push(cell);
+      for (let rr = r; rr < r + rowSpan; rr++)
+        for (let cc = c; cc < c + colSpan; cc++)
+          matrix[rr][cc] = cell;
+      c += colSpan;
+    }
+  }
+  return { matrix, cells, maxCol };
+}
+
+function rebuildTableFromCells(table, cells) {
+  const valid = cells.filter(c => c.rowSpan > 0 && c.colSpan > 0);
+  const maxRow = valid.length ? Math.max(...valid.map(c => c.row + c.rowSpan)) : 0;
+  const newTable = document.createElement('table');
+  for (const attr of Array.from(table.attributes)) newTable.setAttribute(attr.name, attr.value);
+  for (let r = 0; r < maxRow; r++) {
+    const rowCells = valid.filter(c => c.row === r).sort((a, b) => a.col - b.col);
+    const tr = document.createElement('tr');           // ← sempre cria o <tr>
+    for (const cell of rowCells) {
+      const td = document.createElement(cell.data.tag || 'td');
+      if (cell.data.className) td.className = cell.data.className;
+      if (cell.data.styleAttr) td.setAttribute('style', cell.data.styleAttr);
+      if (cell.colSpan > 1) td.colSpan = cell.colSpan;
+      if (cell.rowSpan > 1) td.rowSpan = cell.rowSpan;
+      td.innerHTML = cell.data.html;
+      tr.appendChild(td);
+    }
+    newTable.appendChild(tr);                           // ← anexa mesmo se vazio
+  }
+  return newTable;
+}
+
+function findCellPosInMatrix(td, matrix) {
+  for (let r = 0; r < matrix.length; r++) {
+    for (let c = 0; c < matrix[r].length; c++) {
+      if (matrix[r][c] && matrix[r][c].dom === td) {
+        return { row: matrix[r][c].row, col: matrix[r][c].col, cell: matrix[r][c] };
+      }
+    }
+  }
+  return null;
+}
+
+function duplicateRowAt(table, R) {
+  const { cells } = buildMatrix(table);
+  const out = [];
+  for (const cell of cells) {
+    if (cell.row === R) {
+      if (cell.rowSpan === 1) {
+        out.push(cell);
+        out.push({ ...cell, row: R + 1, dom: null, data: { ...cell.data } });
+      } else {
+        out.push({ ...cell, rowSpan: cell.rowSpan + 1 });
+      }
+    } else if (cell.row < R && cell.row + cell.rowSpan > R) {
+      out.push({ ...cell, rowSpan: cell.rowSpan + 1 });
+    } else if (cell.row > R) {
+      out.push({ ...cell, row: cell.row + 1 });
+    } else {
+      out.push(cell);
+    }
+  }
+  return rebuildTableFromCells(table, out);
+}
+function deleteRowAt(table, R) {
+  const { cells } = buildMatrix(table);
+  const out = [];
+  for (const cell of cells) {
+    if (cell.row === R) {
+      if (cell.rowSpan > 1) out.push({ ...cell, rowSpan: cell.rowSpan - 1 });
+      // else: delete entirely
+    } else if (cell.row < R && cell.row + cell.rowSpan > R) {
+      out.push({ ...cell, rowSpan: cell.rowSpan - 1 });
+    } else if (cell.row > R) {
+      out.push({ ...cell, row: cell.row - 1 });
+    } else {
+      out.push(cell);
+    }
+  }
+  if (!out.length) return null;
+  return rebuildTableFromCells(table, out);
+}
+function duplicateColAt(table, C) {
+  const { cells } = buildMatrix(table);
+  const out = [];
+  for (const cell of cells) {
+    if (cell.col === C) {
+      if (cell.colSpan === 1) {
+        out.push(cell);
+        out.push({ ...cell, col: C + 1, dom: null, data: { ...cell.data } });
+      } else {
+        out.push({ ...cell, colSpan: cell.colSpan + 1 });
+      }
+    } else if (cell.col < C && cell.col + cell.colSpan > C) {
+      out.push({ ...cell, colSpan: cell.colSpan + 1 });
+    } else if (cell.col > C) {
+      out.push({ ...cell, col: cell.col + 1 });
+    } else {
+      out.push(cell);
+    }
+  }
+  return rebuildTableFromCells(table, out);
+}
+function deleteColAt(table, C) {
+  const { cells } = buildMatrix(table);
+  const out = [];
+  for (const cell of cells) {
+    if (cell.col === C) {
+      if (cell.colSpan > 1) out.push({ ...cell, colSpan: cell.colSpan - 1 });
+    } else if (cell.col < C && cell.col + cell.colSpan > C) {
+      out.push({ ...cell, colSpan: cell.colSpan - 1 });
+    } else if (cell.col > C) {
+      out.push({ ...cell, col: cell.col - 1 });
+    } else {
+      out.push(cell);
+    }
+  }
+  if (!out.length) return null;
+  return rebuildTableFromCells(table, out);
+}
+
+/* ============ Duplicar / apagar linha e coluna (grid-based) ============ */
+$('btnDupRow').addEventListener('mousedown', e => e.preventDefault());
+$('btnDupRow').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table');
+  const tr = td.parentElement;
+  const trIdx = Array.from(table.rows).indexOf(tr);
+  const newTable = duplicateRowAt(table, trIdx);
+  table.replaceWith(newTable);
+  setActiveCell(null); pushHistory(); checkOverflow();
+});
+
+$('btnDelRow').addEventListener('mousedown', e => e.preventDefault());
+$('btnDelRow').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table');
+  const tr = td.parentElement;
+  const trIdx = Array.from(table.rows).indexOf(tr);
+  const newTable = deleteRowAt(table, trIdx);
+  if (!newTable || !newTable.rows.length) table.remove();
+  else table.replaceWith(newTable);
+  setActiveCell(null); pushHistory(); checkOverflow();
+});
+
+$('btnDupCol').addEventListener('mousedown', e => e.preventDefault());
+$('btnDupCol').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table');
+  const { matrix } = buildMatrix(table);
+  const pos = findCellPosInMatrix(td, matrix);
+  if (!pos) return;
+  const newTable = duplicateColAt(table, pos.col);
+  table.replaceWith(newTable);
+  setActiveCell(null); pushHistory(); checkOverflow();
+});
+
+$('btnDelCol').addEventListener('mousedown', e => e.preventDefault());
+$('btnDelCol').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table');
+  const { matrix } = buildMatrix(table);
+  const pos = findCellPosInMatrix(td, matrix);
+  if (!pos) return;
+  const newTable = deleteColAt(table, pos.col);
+  if (!newTable || !newTable.rows.length) table.remove();
+  else table.replaceWith(newTable);
+  setActiveCell(null); pushHistory(); checkOverflow();
+});
+
+/* ============ Mesclagem (grid-based) ============ */
+function mergeRight(td) {
+  if (!td) return;
+  const table = td.closest('table');
+  const { matrix } = buildMatrix(table);
+  const pos = findCellPosInMatrix(td, matrix);
+  if (!pos) { alert('Célula não encontrada na grade.'); return; }
+  const { row: r, col: c, cell } = pos;
+  const targetCol = c + cell.colSpan;
+  if (targetCol >= (matrix[r] || []).length) { alert('Não há célula à direita para mesclar.'); return; }
+  const target = matrix[r][targetCol];
+  if (!target || target === cell) { alert('Não há célula à direita.'); return; }
+  if (target.row !== r || target.col !== targetCol) { alert('A posição é ocupada por uma célula mesclada.'); return; }
+  if (target.rowSpan !== cell.rowSpan) { alert('Não é possível mesclar: alturas (rowSpan) diferentes.'); return; }
+  const a = td.querySelector(':scope > .cell-inner') || td;
+  const b = target.dom.querySelector(':scope > .cell-inner') || target.dom;
+  while (b.firstChild) a.appendChild(b.firstChild);
+  td.colSpan = cell.colSpan + target.colSpan;
+  target.dom.remove();
+}
+
+function mergeDown(td) {
+  if (!td) return;
+  const table = td.closest('table');
+  const { matrix } = buildMatrix(table);
+  const pos = findCellPosInMatrix(td, matrix);
+  if (!pos) { alert('Célula não encontrada na grade.'); return; }
+  const { row: r, col: c, cell } = pos;
+  const targetRow = r + cell.rowSpan;
+  if (targetRow >= matrix.length) { alert('Não há linha abaixo para mesclar.'); return; }
+  const target = matrix[targetRow][c];
+  if (!target || target === cell) { alert('Não há célula correspondente abaixo.'); return; }
+  if (target.row !== targetRow || target.col !== c) { alert('A posição é ocupada por uma célula mesclada.'); return; }
+  if (target.colSpan !== cell.colSpan) { alert('Não é possível mesclar: larguras (colSpan) diferentes.'); return; }
+  const a = td.querySelector(':scope > .cell-inner') || td;
+  const b = target.dom.querySelector(':scope > .cell-inner') || target.dom;
+  while (b.firstChild) a.appendChild(b.firstChild);
+  td.rowSpan = cell.rowSpan + target.rowSpan;
+  target.dom.remove();
+}
+
+function unmerge(td) {
+  if (!td) return;
+  const table = td.closest('table');
+  const { matrix } = buildMatrix(table);
+  const pos = findCellPosInMatrix(td, matrix);
+  if (!pos) { alert('Célula não encontrada na grade.'); return; }
+  const { row: r, col: c, cell } = pos;
+  if (cell.rowSpan === 1 && cell.colSpan === 1) { alert('A célula não está mesclada.'); return; }
+  // Reconstrói a tabela: célula vira unitária e o resto vira células vazias
+  const { cells } = buildMatrix(table);
+  const out = [];
+  const emptyData = { tag: 'td', className: '', styleAttr: '', html: '<div class="cell-inner"><br></div>' };
+  for (const cc of cells) {
+    if (cc === cell) {
+      out.push({ ...cc, rowSpan: 1, colSpan: 1 });
+    } else {
+      out.push(cc);
+    }
+  }
+  // Adiciona células vazias para as posições que a célula cobria (exceto a raiz)
+  const occupied = new Set();
+  for (const oc of out) {
+    for (let rr = oc.row; rr < oc.row + oc.rowSpan; rr++)
+      for (let ccc = oc.col; ccc < oc.col + oc.colSpan; ccc++)
+        occupied.add(rr + ',' + ccc);
+  }
+  for (let rr = r; rr < r + cell.rowSpan; rr++) {
+    for (let cc = c; cc < c + cell.colSpan; cc++) {
+      if (rr === r && cc === c) continue;
+      if (!occupied.has(rr + ',' + cc)) {
+        out.push({ row: rr, col: cc, rowSpan: 1, colSpan: 1, dom: null, data: { ...emptyData } });
+        occupied.add(rr + ',' + cc);
+      }
+    }
+  }
+  const newTable = rebuildTableFromCells(table, out);
+  table.replaceWith(newTable);
+  checkOverflow();
+}
+
+$('btnMergeRight').addEventListener('mousedown', e => e.preventDefault());
+$('btnMergeRight').addEventListener('click', () => { const td = getActiveCell(); if (!td) return; mergeRight(td); setActiveCell(null); pushHistory(); checkOverflow(); });
+$('btnMergeDown').addEventListener('mousedown', e => e.preventDefault());
+$('btnMergeDown').addEventListener('click', () => { const td = getActiveCell(); if (!td) return; mergeDown(td); setActiveCell(null); pushHistory(); checkOverflow(); });
+$('btnUnmerge').addEventListener('mousedown', e => e.preventDefault());
+$('btnUnmerge').addEventListener('click', () => { const td = getActiveCell(); if (!td) return; unmerge(td); setActiveCell(null); pushHistory(); checkOverflow(); });
+
+/* ============ Apagar conteúdo / tabela ============ */
+$('btnClearCell').addEventListener('mousedown', e => e.preventDefault());
+$('btnClearCell').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  let inner = td.querySelector('.cell-inner');
+  if (!inner) { inner = document.createElement('div'); inner.className = 'cell-inner'; td.appendChild(inner); }
+  inner.innerHTML = '<br>';
+  pushHistory(); checkOverflow(); placePadHandles(td); checkCellOverflow(td);
+});
+$('btnDelTable').addEventListener('mousedown', e => e.preventDefault());
+$('btnDelTable').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table');
+  if (table && confirm('Apagar a tabela da célula ativa?')) {
+    table.remove(); setActiveCell(null); pushHistory(); checkOverflow();
+  }
+});
+
+/* ============ Resetar posição da tabela ============ */
+$('btnResetPos').addEventListener('mousedown', e => e.preventDefault());
+$('btnResetPos').addEventListener('click', () => {
+  const td = getActiveCell(); if (!td) return;
+  const table = td.closest('table'); if (!table) return;
+  table.style.transform = '';
+  pushHistory();
+  if (activeCell) { placePadHandles(activeCell); checkCellOverflow(activeCell); }
+});
+
+/* ============ Alt + arrastar tabela ============ */
+editor.addEventListener('pointerdown', e => {
+  if (!e.altKey) return;
+  const table = e.target.closest && e.target.closest('table');
+  if (!table || !editor.contains(table)) return;
+  e.preventDefault(); e.stopPropagation();
+  const startX = e.clientX, startY = e.clientY;
+  const curTransform = table.style.transform || '';
+  const m = curTransform.match(/translate\(\s*(-?\d+(?:\.\d+)?)px\s*,\s*(-?\d+(?:\.\d+)?)px\s*\)/);
+  const baseX = m ? parseFloat(m[1]) : 0;
+  const baseY = m ? parseFloat(m[2]) : 0;
+  table.style.willChange = 'transform';
+  document.body.style.cursor = 'move';
+  document.body.style.userSelect = 'none';
+  function move(ev) {
+    const dx = (ev.clientX - startX) / zoom;
+    const dy = (ev.clientY - startY) / zoom;
+    table.style.transform = `translate(${baseX + dx}px, ${baseY + dy}px)`;
+    if (activeCell) placePadHandles(activeCell);
+  }
+  function up() {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    table.style.willChange = '';
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+    pushHistory();
+    if (activeCell) { placePadHandles(activeCell); checkCellOverflow(activeCell); }
+  }
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+});
+
+/* ============ Salvar / carregar modelo JSON ============ */
+function currentSettings() {
+  return {
+    pageW: $('pageW').value, pageH: $('pageH').value,
+    labelW: $('labelW').value, labelH: $('labelH').value,
+    cols: $('cols').value, rows: $('rows').value,
+    mTop: $('mTop').value, mLeft: $('mLeft').value,
+    gapX: $('gapX').value, gapY: $('gapY').value,
+    labelFont: $('labelFont').value, zoom: zoom
+  };
+}
+function applySettings(settings) {
+  if (!settings) return;
+  Object.entries(settings).forEach(([k, v]) => {
+    const el = $(k); if (el && k !== 'zoom') el.value = v;
+  });
+  if (settings.zoom) setZoom(parseFloat(settings.zoom));
+}
+function saveTemplate() {
+  const data = {
+    version: 8,
+    editorHTML: editor.innerHTML,
+    editorBlock: getEditorBlock(),
+    settings: currentSettings()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'modelo-etiqueta.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function loadTemplate(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (data.editorHTML != null) editor.innerHTML = sanitizeHTML(data.editorHTML);
+      applyEditorBlock(data.editorBlock || {});
+      applySettings(data.settings);
+      editor.style.fontSize = ($('labelFont').value || 9.5) + 'pt';
+      updateEditorSize(); updateFieldsInfo(); checkOverflow();
+      setActiveCell(null); pushHistory();
+    } catch (err) { alert('Erro ao carregar modelo: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+$('btnSaveTpl').addEventListener('click', saveTemplate);
+$('btnLoadTpl').addEventListener('click', () => $('tplFile').click());
+$('tplFile').addEventListener('change', e => {
+  if (e.target.files[0]) loadTemplate(e.target.files[0]);
+  e.target.value = '';
+});
+
+/* ============ Biblioteca ============ */
+const LIB_KEY = 'etq_templates_v1';
+function getLibrary() { try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch(_) { return {}; } }
+function setLibrary(lib) { try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; } catch(_) { alert('Não foi possível salvar.'); return false; } }
+function saveToLibrary() {
+  const name = ($('libName').value || '').trim();
+  if (!name) { alert('Digite um nome para o modelo.'); return; }
+  const lib = getLibrary();
+  const id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  lib[id] = {
+    name, editorHTML: editor.innerHTML, editorBlock: getEditorBlock(),
+    settings: currentSettings(), createdAt: Date.now()
+  };
+  if (setLibrary(lib)) { $('libName').value = ''; renderLibrary(); }
+}
+function loadFromLibrary(id) {
+  const lib = getLibrary(); const item = lib[id]; if (!item) return;
+  editor.innerHTML = sanitizeHTML(item.editorHTML);
+  applyEditorBlock(item.editorBlock || {});
+  applySettings(item.settings);
+  editor.style.fontSize = ($('labelFont').value || 9.5) + 'pt';
+  updateEditorSize(); updateFieldsInfo(); checkOverflow();
+  setActiveCell(null); pushHistory();
+  $('status').textContent = `✓ Modelo "${item.name}" carregado.`;
+  $('status').className = 'status ok';
+}
+function renameLibraryItem(id) {
+  const lib = getLibrary(); const item = lib[id]; if (!item) return;
+  const novo = (prompt('Novo nome do modelo:', item.name) || '').trim();
+  if (!novo) return;
+  item.name = novo;
+  if (setLibrary(lib)) renderLibrary();
+}
+function deleteFromLibrary(id) {
+  const lib = getLibrary(); if (!lib[id]) return;
+  if (!confirm(`Excluir o modelo "${lib[id].name}"?`)) return;
+  delete lib[id];
+  if (setLibrary(lib)) renderLibrary();
+}
+function renderLibrary() {
+  const lib = getLibrary();
+  const el  = $('libList');
+  const keys = Object.keys(lib).sort((a, b) => (lib[b].createdAt || 0) - (lib[a].createdAt || 0));
+  if (!keys.length) {
+    el.innerHTML = '<div class="lib-empty">Nenhum modelo salvo ainda. Monte um modelo e clique em “Salvar atual”.</div>';
+    return;
+  }
+  el.innerHTML = keys.map(k => {
+    const item = lib[k];
+    const d = new Date(item.createdAt || 0);
+    const ds = isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+    return `<div class="lib-item" data-id="${escHtml(k)}">
+      <span class="name">${escHtml(item.name)}</span>
+      <span class="date">${ds}</span>
+      <button data-lib-load="${escHtml(k)}" title="Carregar modelo">Carregar</button>
+      <button data-lib-ren="${escHtml(k)}" title="Renomear">✎</button>
+      <button data-lib-del="${escHtml(k)}" title="Excluir">🗑</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-lib-load]').forEach(b => b.addEventListener('click', () => loadFromLibrary(b.dataset.libLoad)));
+  el.querySelectorAll('[data-lib-ren]').forEach(b => b.addEventListener('click', () => renameLibraryItem(b.dataset.libRen)));
+  el.querySelectorAll('[data-lib-del]').forEach(b => b.addEventListener('click', () => deleteFromLibrary(b.dataset.libDel)));
+}
+$('btnLibSave').addEventListener('click', saveToLibrary);
+$('libName').addEventListener('keydown', e => { if (e.key === 'Enter') saveToLibrary(); });
+renderLibrary();
+
+/* ============ Alças azuis ============ */
+let hoveredCell = null, hideTimer = null, dragState = null;
+function placeHandles(cell) {
+  const stageRect = editorStage.getBoundingClientRect();
+  const cellRect  = cell.getBoundingClientRect();
+  const refLeft = stageRect.left + editorStage.clientLeft;
+  const refTop  = stageRect.top  + editorStage.clientTop;
+  const colR = $('colResizer'), rowR = $('rowResizer');
+  colR.style.display = 'block';
+  colR.style.left    = (cellRect.right  - refLeft - 4) + 'px';
+  colR.style.top     = (cellRect.top    - refTop)      + 'px';
+  colR.style.height  = cellRect.height                 + 'px';
+  rowR.style.display = 'block';
+  rowR.style.left    = (cellRect.left   - refLeft)     + 'px';
+  rowR.style.top     = (cellRect.bottom - refTop - 4)  + 'px';
+  rowR.style.width   = cellRect.width                  + 'px';
+  hoveredCell = cell;
+}
+function hideHandles() {
+  const c = $('colResizer'), r = $('rowResizer');
+  if (c) c.style.display = 'none';
+  if (r) r.style.display = 'none';
+  hoveredCell = null;
+}
+function scheduleHide() { clearTimeout(hideTimer); hideTimer = setTimeout(hideHandles, 200); }
+function cancelHide()   { clearTimeout(hideTimer); }
+editor.addEventListener('mousemove', e => {
+  if (dragState || dragPadState) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && (el.classList.contains('col-resizer') || el.classList.contains('row-resizer') || el.classList.contains('pad-handle'))) { cancelHide(); return; }
+  const cell = el && el.closest && el.closest('td, th');
+  if (cell && editor.contains(cell)) { cancelHide(); placeHandles(cell); }
+  else scheduleHide();
+});
+editor.addEventListener('mouseleave', scheduleHide);
+editorStage.addEventListener('scroll', () => {
+  if (hoveredCell) placeHandles(hoveredCell);
+  if (activeCell && !dragPadState) placePadHandles(activeCell);
+});
+window.addEventListener('resize', () => {
+  if (hoveredCell) placeHandles(hoveredCell);
+  if (activeCell && !dragPadState) placePadHandles(activeCell);
+});
+{
+  const layer = $('handleLayer');
+  layer.addEventListener('mouseenter', cancelHide);
+  layer.addEventListener('mouseleave', scheduleHide);
+}
+$('colResizer').addEventListener('pointerdown', e => {
+  if (!hoveredCell) return;
+  e.preventDefault();
+  const cell = hoveredCell, table = cell.closest('table');
+  if (!table) return;
+  if (table.style.tableLayout !== 'fixed') {
+    table.style.tableLayout = 'fixed';
+    table.style.width = table.offsetWidth + 'px';
+  }
+  hidePadHandles();
+  dragState = { type:'col', cell, startX:e.clientX, startW:cell.offsetWidth };
+  $('colResizer').classList.add('active');
+  document.body.style.cursor='col-resize'; document.body.style.userSelect='none';
+});
+$('rowResizer').addEventListener('pointerdown', e => {
+  if (!hoveredCell) return;
+  e.preventDefault();
+  const row = hoveredCell.parentElement; if (!row) return;
+  hidePadHandles();
+  dragState = { type:'row', row, startY:e.clientY, startH:hoveredCell.offsetHeight, savedJustify: editor.style.justifyContent };
+  editor.style.justifyContent = 'flex-start';
+  $('rowResizer').classList.add('active');
+  document.body.style.cursor='row-resize'; document.body.style.userSelect='none';
+});
+document.addEventListener('pointermove', e => {
+  if (!dragState) return;
+  e.preventDefault();
+  if (dragState.type === 'col') {
+    const dx = (e.clientX - dragState.startX) / zoom;
+    const nw = Math.max(20, dragState.startW + dx);
+    dragState.cell.style.width = nw + 'px';
+    dragState.cell.style.minWidth = nw + 'px';
+    dragState.cell.style.boxSizing = 'border-box';
+    if (activeCell === dragState.cell) $('colWidth').value = Math.round(nw);
+  } else {
+    const dy = (e.clientY - dragState.startY) / zoom;
+    const nh = Math.max(10, dragState.startH + dy);
+    dragState.row.style.height = nh + 'px';
+    Array.from(dragState.row.children).forEach(c => { c.style.height = nh + 'px'; c.style.boxSizing = 'border-box'; });
+    if (activeCell && activeCell.parentElement === dragState.row) $('rowHeight').value = Math.round(nh);
+  }
+  if (hoveredCell) placeHandles(hoveredCell);
+  checkOverflow();
+});
+document.addEventListener('pointerup', () => {
+  if (!dragState) return;
+  if (dragState.type === 'row' && dragState.savedJustify !== undefined) {
+    editor.style.justifyContent = dragState.savedJustify;
+  }
+  dragState = null;
+  $('colResizer').classList.remove('active');
+  $('rowResizer').classList.remove('active');
+  document.body.style.cursor=''; document.body.style.userSelect='';
+  pushHistory(); refreshPadHandles();
+  if (activeCell) checkCellOverflow(activeCell);
+});
+
+/* ============ Campos ============ */
+function popularCampos() {
+  const sel = $('selField'), btn = $('btnInsertField');
+  const btnQR = $('btnQR'), btnBar = $('btnBarcode');
+  if (!headers || !headers.length) {
+    sel.innerHTML = '<option value="">— carregue a planilha —</option>';
+    sel.disabled = true; btn.disabled = true;
+    if (btnQR) btnQR.disabled = true;
+    if (btnBar) btnBar.disabled = true;
+    return;
+  }
+  sel.disabled = false; btn.disabled = false;
+  if (btnQR) btnQR.disabled = false;
+  if (btnBar) btnBar.disabled = false;
+  sel.innerHTML = '<option value="">—</option>' +
+    headers.map(h => `<option value="${escHtml(h)}">${escHtml(h)}</option>`).join('');
+}
+popularCampos();
+
+/* ============ Formatação ============ */
+editor.addEventListener('input', () => {
+  updateFieldsInfo(); checkOverflow(); pushHistoryDebounced();
+  if (activeCell && editor.contains(activeCell)) {
+    const align = activeCell.classList.contains('cell-mid') ? 'middle' :
+                  activeCell.classList.contains('cell-bot') ? 'bottom' : 'top';
+    applyCellAlign(activeCell, align);
+    placePadHandles(activeCell);
+  }
+});
+editor.addEventListener('mouseup', atualizarEstadoBotoes);
+editor.addEventListener('keyup',  atualizarEstadoBotoes);
+document.execCommand('styleWithCSS', false, true);
+document.querySelectorAll('button[data-cmd]').forEach(btn => {
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.addEventListener('click', e => {
+    e.preventDefault(); editor.focus();
+    document.execCommand(btn.dataset.cmd, false, null);
+    atualizarEstadoBotoes(); checkOverflow(); pushHistoryDebounced();
+  });
+});
+function atualizarEstadoBotoes() {
+  ['bold','italic','underline','justifyLeft','justifyCenter','justifyRight'].forEach(cmd => {
+    const btn = document.querySelector(`button[data-cmd="${cmd}"]`);
+    if (!btn) return;
+    try { btn.classList.toggle('active', document.queryCommandState(cmd)); } catch(_) {}
+  });
+}
+$('selFontSize').addEventListener('change', e => {
+  const pt = e.target.value; if (!pt) return;
+  editor.focus();
+  document.execCommand('fontSize', false, '7');
+  editor.querySelectorAll('font[size="7"]').forEach(f => {
+    const span = document.createElement('span');
+    span.style.fontSize = pt + 'pt';
+    while (f.firstChild) span.appendChild(f.firstChild);
+    f.replaceWith(span);
+  });
+  e.target.value = ''; checkOverflow(); pushHistory();
+});
+$('fontColor').addEventListener('input', e => { editor.focus(); document.execCommand('foreColor', false, e.target.value); });
+$('fontColor').addEventListener('change', () => pushHistory());
+$('borderColor').addEventListener('input', e => {
+  const color = e.target.value;
+  editor.querySelectorAll('table, td, th').forEach(el => { if (el.style.border) el.style.borderColor = color; });
+});
+$('borderColor').addEventListener('change', () => pushHistory());
+$('btnClearFormat').addEventListener('mousedown', e => e.preventDefault());
+$('btnClearFormat').addEventListener('click', () => {
+  editor.focus(); document.execCommand('removeFormat'); checkOverflow(); pushHistory();
+});
+
+/* ============ Inserir campo ============ */
+$('btnInsertField').addEventListener('mousedown', e => e.preventDefault());
+$('btnInsertField').addEventListener('click', () => {
+  const nome = $('selField').value; if (!nome || !headers) return;
+  editor.focus();
+  const html = `<span class="field-token" data-field="${escHtml(nome)}" contenteditable="false">${escHtml(nome)}</span>`;
+  document.execCommand('insertHTML', false, html);
+  $('selField').value = '';
+  updateFieldsInfo(); checkOverflow(); pushHistory();
+});
+
+/* ============ QR / Barcode ============ */
+function insertCode(type) {
+  const nome = $('selField').value;
+  if (!nome || !headers) { alert('Selecione um campo da planilha primeiro.'); return; }
+  editor.focus();
+  const label = type === 'qr' ? '[QR: ' + nome + ']' : '[BAR: ' + nome + ']';
+  const html = `<span class="field-token code-token" data-field="${escHtml(nome)}" data-type="${type}" contenteditable="false">${escHtml(label)}</span>`;
+  document.execCommand('insertHTML', false, html);
+  $('selField').value = '';
+  updateFieldsInfo(); checkOverflow(); pushHistory();
+}
+$('btnQR').addEventListener('mousedown', e => e.preventDefault());
+$('btnQR').addEventListener('click', () => insertCode('qr'));
+$('btnBarcode').addEventListener('mousedown', e => e.preventDefault());
+$('btnBarcode').addEventListener('click', () => insertCode('barcode'));
+
+/* ============ Inserir tabela ============ */
+function makeTableHTML(r, c) {
+  let html = '<table style="table-layout:fixed;width:100%">';
+  for (let i = 0; i < r; i++) {
+    html += '<tr style="height:20px">';
+    for (let j = 0; j < c; j++) {
+      html += '<td class="cell-top" style="height:20px"><div class="cell-inner" style="padding:1px 3px"><br></div></td>';
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  return html;
+}
+$('btnTable').addEventListener('mousedown', e => e.preventDefault());
+$('btnTable').addEventListener('click', () => {
+  const l = parseInt(prompt('Quantas linhas?', '4'), 10);
+  const c = parseInt(prompt('Quantas colunas?', '2'), 10);
+  if (!l || !c || l < 1 || c < 1) return;
+  editor.focus();
+  document.execCommand('insertHTML', false, makeTableHTML(l, c));
+  setTimeout(() => { checkOverflow(); pushHistory(); }, 0);
+});
+
+/* ============ Bordas ============ */
+$('btnBorders').addEventListener('mousedown', e => e.preventDefault());
+$('btnBorders').addEventListener('click', () => {
+  bordersOn = !bordersOn;
+  const color = $('borderColor').value;
+  editor.querySelectorAll('table, td, th').forEach(el => {
+    if (bordersOn) el.style.border = '1px solid ' + color;
+    else el.style.border = '';
+  });
+  $('btnBorders').classList.toggle('active', bordersOn);
+  checkOverflow(); pushHistory();
+});
+
+/* ============ Imagem ============ */
+$('btnImage').addEventListener('mousedown', e => e.preventDefault());
+$('btnImage').addEventListener('click', () => $('imgFile').click());
+$('imgFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    editor.focus();
+    const html = `<img src="${reader.result}" alt="" style="max-width:100%;height:auto;vertical-align:middle">`;
+    document.execCommand('insertHTML', false, html);
+    setTimeout(() => { checkOverflow(); pushHistory(); }, 0);
+  };
+  reader.readAsDataURL(f); e.target.value = '';
+});
+
+/* ============ Preset ============ */
+$('preset').addEventListener('change', e => {
+  const p = PRESETS[e.target.value]; if (!p) return;
+  ['pageW','pageH','labelW','labelH','cols','rows','mTop','mLeft','gapX','gapY'].forEach(k => $(k).value = p[k]);
+  updateEditorSize();
+});
+
+/* ============ Dimensões / fonte base ============ */
+['labelW','labelH'].forEach(id => $(id).addEventListener('input', updateEditorSize));
+$('labelFont').addEventListener('input', () => {
+  editor.style.fontSize = ($('labelFont').value || 9.5) + 'pt';
+  checkOverflow();
+  if (activeCell) setTimeout(() => { placePadHandles(activeCell); checkCellOverflow(activeCell); }, 0);
+});
+
+/* ============ Zoom ============ */
+$('zoomSelect').addEventListener('change', e => setZoom(parseFloat(e.target.value)));
+$('editorCaption').addEventListener('dblclick', () => setZoom(zoom >= 1.5 ? 1 : 2));
+
+/* ============ Sidebar redimensionável ============ */
+function setSidebarWidth(px, save=true) {
+  const max = window.innerWidth * 0.72;
+  const w = Math.max(360, Math.min(max, px));
+  sidebar.style.width = w + 'px';
+  if (save) try { localStorage.setItem('etq_sidebar_w', String(w)); } catch(_) {}
+}
+sidebarResizer.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const startX = e.clientX, startW = sidebar.getBoundingClientRect().width;
+  sidebarResizer.classList.add('active');
+  document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+  function move(ev) { setSidebarWidth(startW + (ev.clientX - startX)); }
+  function up() {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    sidebarResizer.classList.remove('active');
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+    if (hoveredCell) placeHandles(hoveredCell);
+    if (activeCell) placePadHandles(activeCell);
+  }
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+});
+window.addEventListener('resize', () => {
+  if ($('previewPane').classList.contains('visible')) {
+    setSidebarWidth(sidebar.getBoundingClientRect().width, false);
+  }
+});
+
+/* ============ Preview ============ */
+function showPreview() {
+  const pane = $('previewPane');
+  if (pane.classList.contains('visible')) return;
+  pane.classList.add('visible');
+  sidebarResizer.classList.add('visible');
+  sidebar.classList.add('with-preview');
+  try {
+    const sw = parseFloat(localStorage.getItem('etq_sidebar_w'));
+    setSidebarWidth((sw && sw >= 360) ? sw : 700, false);
+  } catch(_) { setSidebarWidth(700, false); }
+  setTimeout(() => {
+    if (hoveredCell) placeHandles(hoveredCell);
+    if (activeCell) placePadHandles(activeCell);
+  }, 60);
+}
+
+/* ============ Planilha + seleção de aba ============ */
+async function loadSheetFromWorkbook(sheetName) {
+  headers = null; rows = null;
+  $('genBtn').disabled = true;
+  $('testBtn').disabled = true;
+  $('printBtn').style.display = 'none';
+  $('status').textContent = ''; $('status').className = 'status';
+  $('preview').innerHTML = '';
+  popularCampos(); updateFieldsInfo();
+
+  try {
+    const wb = currentWorkbook;
+    if (!wb) throw new Error('Nenhum arquivo carregado.');
+    if (!wb.SheetNames.includes(sheetName)) throw new Error('Aba inexistente: ' + sheetName);
+    const sheet = wb.Sheets[sheetName];
+    const data  = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: 'dd/mm/yyyy', defval: '' });
+
+    const localHeaders = (data[0] || []).map(h => String(h).trim()).filter(h => h !== '');
+    const localRows    = data.slice(1).filter(r => r.some(c => c != null && String(c).trim() !== ''));
+
+    if (!localHeaders.length) throw new Error('A planilha não possui cabeçalhos válidos na primeira linha.');
+    if (!localRows.length)    throw new Error('A planilha não possui nenhum registro abaixo do cabeçalho.');
+
+    const seen = new Set(); const dup = [];
+    localHeaders.forEach(h => {
+      const k = h.toLowerCase();
+      if (seen.has(k)) dup.push(h); else seen.add(k);
+    });
+    if (dup.length) throw new Error('Cabeçalhos duplicados: ' + dup.join(', '));
+
+    headers = localHeaders;
+    rows    = localRows;
+
+    $('sheetStatus').textContent = `✓ Aba "${sheetName}" · ${rows.length} registro(s)\nColunas: ${headers.join(' | ')}`;
+    $('sheetStatus').className = 'status ok';
+    $('genBtn').disabled = false;
+    $('testBtn').disabled = false;
+    popularCampos(); updateFieldsInfo();
+  } catch (err) {
+    $('sheetStatus').textContent = '⚠️ ' + err.message;
+    $('sheetStatus').className = 'status err';
+  }
+}
+$('xlsxFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  $('sheetStatus').textContent = 'Lendo planilha…';
+  $('sheetStatus').className = 'status';
+  try {
+    const buf = await file.arrayBuffer();
+    currentWorkbook = XLSX.read(buf, { type: 'array', cellDates: true });
+    const picker = $('sheetPicker');
+    picker.innerHTML = '';
+    currentWorkbook.SheetNames.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      picker.appendChild(opt);
+    });
+    $('sheetPickerRow').style.display = currentWorkbook.SheetNames.length > 1 ? '' : 'none';
+    picker.value = currentWorkbook.SheetNames[0];
+    await loadSheetFromWorkbook(currentWorkbook.SheetNames[0]);
+  } catch (err) {
+    currentWorkbook = null;
+    $('sheetStatus').textContent = '⚠️ Erro ao abrir arquivo: ' + err.message;
+    $('sheetStatus').className = 'status err';
+    $('sheetPickerRow').style.display = 'none';
+  }
+});
+$('sheetPicker').addEventListener('change', e => loadSheetFromWorkbook(e.target.value));
+
+/* ============ Validação (Number.isFinite) ============ */
+function validateConfig(cfg) {
+  const errs = [];
+  const warns = [];
+
+  const numeric = [
+    ['Largura da folha', cfg.pageW],
+    ['Altura da folha', cfg.pageH],
+    ['Largura da etiqueta', cfg.labelW],
+    ['Altura da etiqueta', cfg.labelH],
+    ['Margem topo', cfg.mTop],
+    ['Margem esquerda', cfg.mLeft],
+    ['Espaço horizontal', cfg.gapX],
+    ['Espaço vertical', cfg.gapY]
+  ];
+  for (const [nome, valor] of numeric) {
+    if (!Number.isFinite(valor)) errs.push(`${nome} deve ser um número válido.`);
+  }
+  if (!Number.isInteger(cfg.cols) || cfg.cols < 1) errs.push('Colunas deve ser inteiro ≥ 1.');
+  if (!Number.isInteger(cfg.rows) || cfg.rows < 1) errs.push('Linhas deve ser inteiro ≥ 1.');
+
+  if (errs.length) return { errs, warns };
+
+  if (cfg.pageW <= 0)  errs.push('Largura da folha deve ser > 0.');
+  if (cfg.pageH <= 0)  errs.push('Altura da folha deve ser > 0.');
+  if (cfg.labelW <= 0) errs.push('Largura da etiqueta deve ser > 0.');
+  if (cfg.labelH <= 0) errs.push('Altura da etiqueta deve ser > 0.');
+  if (cfg.mTop < 0 || cfg.mLeft < 0) errs.push('Margens não podem ser negativas.');
+  if (cfg.gapX < 0 || cfg.gapY < 0)  errs.push('Espaçamentos não podem ser negativos.');
+  if (cfg.mTop >= cfg.pageH) errs.push('Margem topo ≥ altura da folha — não sobra área para imprimir.');
+  if (cfg.mLeft >= cfg.pageW) errs.push('Margem esquerda ≥ largura da folha — não sobra área para imprimir.');
+  if (cfg.labelW > cfg.pageW) errs.push('Etiqueta mais larga que a folha.');
+  if (cfg.labelH > cfg.pageH) errs.push('Etiqueta mais alta que a folha.');
+
+  if (errs.length) return { errs, warns };
+
+  const gridW = cfg.cols * cfg.labelW + (cfg.cols - 1) * cfg.gapX;
+  const gridH = cfg.rows * cfg.labelH + (cfg.rows - 1) * cfg.gapY;
+  const availW = cfg.pageW - cfg.mLeft;
+  const availH = cfg.pageH - cfg.mTop;
+  if (gridW > availW + 0.05) errs.push(`Etiquetas ocupam ${gridW.toFixed(1)} mm de largura, mas só cabem ${availW.toFixed(1)} mm.`);
+  if (gridH > availH + 0.05) errs.push(`Etiquetas ocupam ${gridH.toFixed(1)} mm de altura, mas só cabem ${availH.toFixed(1)} mm.`);
+
+  return { errs, warns };
+}
+
+/* ============ Geração em lotes ============ */
+function generateLabelsAsync(tpl, cfg, rows, headers, preview, progressCb) {
+  const perPage = cfg.cols * cfg.rows;
+  const totalPages = Math.ceil(rows.length / perPage);
+  const totalLabels = rows.length;
+  const gridW = cfg.cols * cfg.labelW + (cfg.cols - 1) * cfg.gapX;
+  const gridH = cfg.rows * cfg.labelH + (cfg.rows - 1) * cfg.gapY;
+  const editorJC = editor.style.justifyContent || 'flex-start';
+  const editorAI = editor.style.alignItems || 'stretch';
+  const editorTA = editor.style.textAlign || 'left';
+
+  preview.innerHTML = '';
+  const labelEls = [];
+  for (let p = 0; p < totalPages; p++) {
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.style.width = cfg.pageW + 'mm'; page.style.height = cfg.pageH + 'mm';
+    page.style.paddingTop = cfg.mTop + 'mm'; page.style.paddingLeft = cfg.mLeft + 'mm';
+    page.style.gridTemplateColumns = `repeat(${cfg.cols}, ${cfg.labelW}mm)`;
+    page.style.gridTemplateRows    = `repeat(${cfg.rows}, ${cfg.labelH}mm)`;
+    page.style.columnGap = cfg.gapX + 'mm'; page.style.rowGap = cfg.gapY + 'mm';
+    const addBox = (x,y,w,h) => {
+      if (w <= 0.01 || h <= 0.01) return;
+      const b = document.createElement('div'); b.className = 'margin-box';
+      b.style.left=x+'mm'; b.style.top=y+'mm'; b.style.width=w+'mm'; b.style.height=h+'mm';
+      page.appendChild(b);
+    };
+    addBox(0, 0, cfg.pageW, cfg.mTop);
+    addBox(0, cfg.mTop, cfg.mLeft, cfg.pageH - cfg.mTop);
+    addBox(cfg.mLeft + gridW, 0, cfg.pageW - cfg.mLeft - gridW, cfg.pageH);
+    addBox(0, cfg.mTop + gridH, cfg.pageW, cfg.pageH - cfg.mTop - gridH);
+    for (let i = 0; i < perPage; i++) {
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.style.fontSize = cfg.font + 'pt';
+      label.style.justifyContent = editorJC;
+      label.style.alignItems = editorAI;
+      label.style.textAlign = editorTA;
+      page.appendChild(label);
+      labelEls.push(label);
+    }
+    preview.appendChild(page);
+  }
+
+  const BATCH = 40;
+  let processed = 0;
+  return new Promise(resolve => {
+    function step() {
+      if (processed >= totalLabels) { resolve({ totalPages, totalLabels }); return; }
+      const end = Math.min(processed + BATCH, totalLabels);
+      for (let i = processed; i < end; i++) {
+        const label = labelEls[i]; if (!label) continue;
+        label.innerHTML = fillTemplate(tpl, headers, rows[i]);
+        label.querySelectorAll('.active-cell').forEach(el => el.classList.remove('active-cell'));
+        label.querySelectorAll('.cell-overflow').forEach(el => el.classList.remove('cell-overflow'));
+      }
+      processed = end;
+      if (progressCb) progressCb(processed, totalLabels);
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* ============ Folha de teste ============ */
+function buildTestSheet(tpl, cfg, rows, headers, preview) {
+  const gridW = cfg.cols * cfg.labelW + (cfg.cols - 1) * cfg.gapX;
+  const gridH = cfg.rows * cfg.labelH + (cfg.rows - 1) * cfg.gapY;
+  const editorJC = editor.style.justifyContent || 'flex-start';
+  const editorAI = editor.style.alignItems || 'stretch';
+  const editorTA = editor.style.textAlign || 'left';
+
+  preview.innerHTML = '';
+
+  const page = document.createElement('div');
+  page.className = 'page test-page';
+  page.style.width = cfg.pageW + 'mm';
+  page.style.height = cfg.pageH + 'mm';
+  page.style.paddingTop = cfg.mTop + 'mm';
+  page.style.paddingLeft = cfg.mLeft + 'mm';
+  page.style.gridTemplateColumns = `repeat(${cfg.cols}, ${cfg.labelW}mm)`;
+  page.style.gridTemplateRows    = `repeat(${cfg.rows}, ${cfg.labelH}mm)`;
+  page.style.columnGap = cfg.gapX + 'mm';
+  page.style.rowGap = cfg.gapY + 'mm';
+
+  const addBox = (x,y,w,h) => {
+    if (w <= 0.01 || h <= 0.01) return;
+    const b = document.createElement('div'); b.className = 'margin-box';
+    b.style.left=x+'mm'; b.style.top=y+'mm'; b.style.width=w+'mm'; b.style.height=h+'mm';
+    page.appendChild(b);
+  };
+  addBox(0, 0, cfg.pageW, cfg.mTop);
+  addBox(0, cfg.mTop, cfg.mLeft, cfg.pageH - cfg.mTop);
+  addBox(cfg.mLeft + gridW, 0, cfg.pageW - cfg.mLeft - gridW, cfg.pageH);
+  addBox(0, cfg.mTop + gridH, cfg.pageW, cfg.pageH - cfg.mTop - gridH);
+
+  // Borda da área imprimível
+  const areaBorder = document.createElement('div');
+  areaBorder.className = 'test-area-border';
+  areaBorder.style.left = cfg.mLeft + 'mm';
+  areaBorder.style.top  = cfg.mTop + 'mm';
+  areaBorder.style.width  = gridW + 'mm';
+  areaBorder.style.height = gridH + 'mm';
+  page.appendChild(areaBorder);
+
+  // Linhas de corte
+  for (let c = 1; c < cfg.cols; c++) {
+    const cut = document.createElement('div');
+    cut.className = 'test-cut test-cut-v';
+    cut.style.left = (cfg.mLeft + c * cfg.labelW + (c - 0.5) * cfg.gapX) + 'mm';
+    cut.style.top  = cfg.mTop + 'mm';
+    cut.style.height = gridH + 'mm';
+    page.appendChild(cut);
+  }
+  for (let r = 1; r < cfg.rows; r++) {
+    const cut = document.createElement('div');
+    cut.className = 'test-cut test-cut-h';
+    cut.style.top = (cfg.mTop + r * cfg.labelH + (r - 0.5) * cfg.gapY) + 'mm';
+    cut.style.left = cfg.mLeft + 'mm';
+    cut.style.width = gridW + 'mm';
+    page.appendChild(cut);
+  }
+
+  // Réguas
+  if (cfg.mTop > 6) {
+    const rulerH = document.createElement('div');
+    rulerH.className = 'test-ruler-h';
+    rulerH.style.left = cfg.mLeft + 'mm';
+    rulerH.style.top  = '1mm';
+    rulerH.style.width  = gridW + 'mm';
+    rulerH.style.height = Math.max(3, cfg.mTop - 2) + 'mm';
+    rulerH.textContent = `◄ ${gridW.toFixed(1)} mm ►`;
+    page.appendChild(rulerH);
+  }
+  if (cfg.mLeft > 6) {
+    const rulerV = document.createElement('div');
+    rulerV.className = 'test-ruler-v';
+    rulerV.style.left = '0.5mm';
+    rulerV.style.top  = cfg.mTop + 'mm';
+    rulerV.style.width  = Math.max(3, cfg.mLeft - 1) + 'mm';
+    rulerV.style.height = gridH + 'mm';
+    rulerV.style.writingMode = 'vertical-rl';
+    rulerV.textContent = `▲ ${gridH.toFixed(1)} mm ▼`;
+    page.appendChild(rulerV);
+  }
+
+  // Info dentro da própria página
+  const pinfo = document.createElement('div');
+  pinfo.className = 'test-info';
+  pinfo.style.left = '1mm';
+  pinfo.style.bottom = '1mm';
+  pinfo.style.maxWidth = (cfg.pageW - 2) + 'mm';
+  pinfo.innerHTML =
+    `<b>🧪 Folha de teste</b> — ${cfg.pageW}×${cfg.pageH} mm · ` +
+    `Etiqueta ${cfg.labelW}×${cfg.labelH} mm · ${cfg.cols}×${cfg.rows} · ` +
+    `Margens ${cfg.mTop}/${cfg.mLeft} mm · Total previsto: ${rows.length}`;
+  page.appendChild(pinfo);
+
+  // Etiquetas
+  const perPage = cfg.cols * cfg.rows;
+  for (let i = 0; i < perPage; i++) {
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.style.fontSize = cfg.font + 'pt';
+    label.style.justifyContent = editorJC;
+    label.style.alignItems = editorAI;
+    label.style.textAlign = editorTA;
+    if (i < Math.min(rows.length, 2)) {
+      label.innerHTML = fillTemplate(tpl, headers, rows[i]);
+    } else {
+      const marker = document.createElement('div');
+      marker.className = 'test-label-marker';
+      marker.textContent = `Etiqueta ${i + 1}`;
+      label.appendChild(marker);
+    }
+    label.querySelectorAll('.active-cell').forEach(el => el.classList.remove('active-cell'));
+    label.querySelectorAll('.cell-overflow').forEach(el => el.classList.remove('cell-overflow'));
+    page.appendChild(label);
+  }
+
+  preview.appendChild(page);
+}
+
+/* ============ Gerar / Teste ============ */
+function collectCfg() {
+  const rawCols = +$('cols').value;
+  const rawRows = +$('rows').value;
+  if (!Number.isInteger(rawCols)) { $('status').textContent = '⚠️ "Colunas" deve ser um número inteiro.'; $('status').className = 'status err'; return null; }
+  if (!Number.isInteger(rawRows)) { $('status').textContent = '⚠️ "Linhas" deve ser um número inteiro.'; $('status').className = 'status err'; return null; }
+  return {
+    pageW: +$('pageW').value, pageH: +$('pageH').value,
+    labelW: +$('labelW').value, labelH: +$('labelH').value,
+    cols: rawCols, rows: rawRows,
+    mTop: +$('mTop').value, mLeft: +$('mLeft').value,
+    gapX: +$('gapX').value, gapY: +$('gapY').value,
+    font: +$('labelFont').value || 9.5
+  };
+}
+
+$('genBtn').addEventListener('click', async () => {
+  const tpl = editor.innerHTML.trim();
+  if (!rows || !tpl) {
+    $('status').textContent = '⚠️ Carregue a planilha e defina o modelo antes de gerar.';
+    $('status').className = 'status err'; return;
+  }
+  const cfg = collectCfg(); if (!cfg) return;
+
+  const { errs, warns } = validateConfig(cfg);
+  if (errs.length) {
+    $('status').textContent = '⛔ Não é possível gerar:\n' + errs.map(e => '• ' + e).join('\n');
+    $('status').className = 'status err';
+    return;
+  }
+
+  const perPage = cfg.cols * cfg.rows;
+  const totalPages = Math.ceil(rows.length / perPage);
+  $('pageSizeStyle').textContent = `@page { size: ${cfg.pageW}mm ${cfg.pageH}mm; margin: 0; }`;
+
+  const detectados = detectFields(tpl);
+  const faltando = detectados.filter(f => !headers.some(h => h.toLowerCase() === f.toLowerCase()));
+  if (faltando.length) warns.push(`Campos sem correspondência na planilha: ${faltando.join(', ')}`);
+
+  const btnGen = $('genBtn');
+  const prevLabel = btnGen.textContent;
+  btnGen.disabled = true;
+  btnGen.textContent = 'Gerando…';
+  $('status').className = 'status';
+  $('status').textContent = `Gerando ${rows.length} etiqueta(s)…`;
+  showPreview();
+
+  try {
+    await generateLabelsAsync(tpl, cfg, rows, headers, $('preview'), (done, total) => {
+      const pct = Math.round((done / total) * 100);
+      $('status').textContent = `Gerando ${total} etiqueta(s)… ${pct}%`;
+    });
+    const resumo = `✓ ${rows.length} etiqueta(s) em ${totalPages} página(s) de ${cfg.pageW}×${cfg.pageH} mm.`;
+    $('status').textContent = warns.length ? resumo + '\n⚠️ ' + warns.join('\n⚠️ ') : resumo;
+    $('status').className = warns.length ? 'status warn' : 'status ok';
+    $('printBtn').style.display = 'inline-block';
+  } catch (err) {
+    $('status').textContent = '⛔ Falha ao gerar: ' + err.message;
+    $('status').className = 'status err';
+  } finally {
+    btnGen.disabled = false;
+    btnGen.textContent = prevLabel;
+  }
+});
+
+$('testBtn').addEventListener('click', () => {
+  const tpl = editor.innerHTML.trim();
+  if (!rows || !tpl) {
+    $('status').textContent = '⚠️ Carregue a planilha e defina o modelo antes de gerar a folha de teste.';
+    $('status').className = 'status err'; return;
+  }
+  const cfg = collectCfg(); if (!cfg) return;
+  const { errs } = validateConfig(cfg);
+  if (errs.length) {
+    $('status').textContent = '⛔ Não é possível gerar:\n' + errs.map(e => '• ' + e).join('\n');
+    $('status').className = 'status err';
+    return;
+  }
+  $('pageSizeStyle').textContent = `@page { size: ${cfg.pageW}mm ${cfg.pageH}mm; margin: 0; }`;
+  buildTestSheet(tpl, cfg, rows, headers, $('preview'));
+  showPreview();
+  $('status').textContent = '✓ Folha de teste gerada. Confira o alinhamento e depois clique em “Gerar pré-visualização”.';
+  $('status').className = 'status ok';
+  $('printBtn').style.display = 'inline-block';
+});
+
+/* ============ Impressão via iframe isolado ============ */
+function printViaIframe() {
+  const previewEl = $('preview');
+  const pages = Array.from(previewEl.querySelectorAll('.page'));
+  if (!pages.length) { alert('Nada para imprimir. Gere a pré-visualização primeiro.'); return; }
+
+  const cfg = {
+    pageW: +$('pageW').value || 210,
+    pageH: +$('pageH').value || 297,
+    labelW: +$('labelW').value || 99.1,
+    labelH: +$('labelH').value || 33.9,
+    cols: +$('cols').value || 2,
+    rows: +$('rows').value || 8,
+    mTop: +$('mTop').value || 12.9,
+    mLeft: +$('mLeft').value || 4.7,
+    gapX: +$('gapX').value || 2.5,
+    gapY: +$('gapY').value || 0,
+    font: +$('labelFont').value || 9.5
+  };
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:0;height:0;border:0;';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+  const pagesHTML = pages.map(p => {
+    const c = p.cloneNode(true);
+    c.style.width = ''; c.style.height = '';
+    c.style.paddingTop = ''; c.style.paddingLeft = '';
+    c.style.margin = ''; c.style.boxShadow = '';
+    c.querySelectorAll('.active-cell').forEach(el => el.classList.remove('active-cell'));
+    c.querySelectorAll('.cell-overflow').forEach(el => el.classList.remove('cell-overflow'));
+    return c.outerHTML;
+  }).join('');
+
+  const css = `
+    @page { size: ${cfg.pageW}mm ${cfg.pageH}mm; margin: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #000; }
+
+    .page {
+      width: ${cfg.pageW}mm;
+      height: ${cfg.pageH - 0.3}mm;
+      margin: 0;
+      padding: ${cfg.mTop}mm 0 0 ${cfg.mLeft}mm;
+      display: grid;
+      grid-template-columns: repeat(${cfg.cols}, ${cfg.labelW}mm);
+      grid-template-rows: repeat(${cfg.rows}, ${cfg.labelH}mm);
+      column-gap: ${cfg.gapX}mm;
+      row-gap: ${cfg.gapY}mm;
+      overflow: hidden;
+      position: relative;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      break-before: page;
+      page-break-before: always;
+    }
+    .page:first-child { break-before: auto; page-break-before: auto; }
+    .margin-box { display: none !important; }
+
+    .label {
+      overflow: hidden;
+      padding: 1.8mm 2mm;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: ${cfg.font}pt;
+      line-height: 1.2;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      outline: none;
+    }
+
+    /* Tabelas */
+    .label table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+    .label td, .label th { padding: 0; height: 20px; overflow: hidden; vertical-align: top; position: relative; }
+
+    /* Célula / wrapper */
+    .label .cell-inner {
+      position: absolute; inset: 0; padding: 1px 3px;
+      box-sizing: border-box; overflow: hidden;
+      display: flex; flex-direction: column;
+      justify-content: flex-start; line-height: 1.15;
+    }
+    /* NOVO — permite que filhos encolham e respeitem o container */
+    .label .cell-inner > * { min-height: 0; min-width: 0; max-width: 100%; }
+
+    /* NOVO — alinhamento vertical por célula */
+    .label td > .cell-inner { justify-content: flex-start; }
+    .label td.cell-top > .cell-inner > *:last-child { margin-bottom: auto; }
+    .label td.cell-mid > .cell-inner > *:first-child { margin-top: auto; }
+    .label td.cell-mid > .cell-inner > *:last-child { margin-bottom: auto; }
+    .label td.cell-bot > .cell-inner > *:first-child { margin-top: auto; }
+
+    /* NOVO — imagens e SVG dentro da célula */
+    .label img, .label svg { max-width: 100%; max-height: 100%; height: auto; vertical-align: middle; }
+    .label .cell-inner > img,
+    .label .cell-inner > svg { display: block; margin-left: auto; margin-right: auto; }
+
+    .label p { margin: 2px 0; }
+
+    /* Folha de teste */
+    .test-page { position: relative; }
+    .test-cut { position: absolute; z-index: 3; pointer-events: none; }
+    .test-cut-v { border-left: 1px dashed #d81b60; }
+    .test-cut-h { border-top: 1px dashed #d81b60; }
+    .test-label-marker { position: absolute; z-index: 4; font-family: Arial; font-size: 6pt; color: #999; top: 1mm; left: 1mm; }
+    .test-ruler-h, .test-ruler-v {
+      position: absolute; z-index: 5; background: rgba(26,35,126,.06);
+      border: 1px solid rgba(26,35,126,.4); font-family: monospace; font-size: 7pt;
+      color: #1a237e; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; white-space: nowrap;
+    }
+    .test-info {
+      position: absolute; z-index: 6; font-family: Arial; font-size: 7pt;
+      color: #1a237e; background: rgba(255,255,255,.95); border: 1px solid #1a237e;
+      padding: 1px 4px; border-radius: 2px; line-height: 1.2;
+    }
+    .test-area-border { position: absolute; z-index: 4; border: 1px dashed #1a237e; }
+  `;
+
+  doc.open();
+  doc.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Etiquetas</title><style>${css}</style></head><body>${pagesHTML}</body></html>`);
+  doc.close();
+
+  const doPrint = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) { console.error(e); }
+    finally { setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 1500); }
+  };
+
+  if (doc.readyState === 'complete') setTimeout(doPrint, 200);
+  else iframe.onload = () => setTimeout(doPrint, 200);
+}
+
+/* ============ Impressão ============ */
+$('printBtn').addEventListener('click', printViaIframe);
+
+/* ============ Bateria de testes das tabelas ============ */
+function runTableTests() {
+  const out = [];
+  const test = (name, fn) => {
+    try { fn(); out.push({ name, ok: true }); }
+    catch (e) { out.push({ name, ok: false, msg: e.message }); }
+  };
+  const eq = (a, b, m) => { if (a !== b) throw new Error(`${m || 'valor'}: esperado ${b}, obtido ${a}`); };
+  const mk = (html) => { const t = document.createElement('table'); t.innerHTML = html; return t; };
+
+  test('2×2: duplicar linha 0 → 3 linhas', () => {
+    const t = mk('<tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr>');
+    const nt = duplicateRowAt(t, 0);
+    eq(nt.rows.length, 3);
+    eq(nt.rows[0].cells.length, 2);
+    eq(nt.rows[1].cells.length, 2);
+  });
+
+  test('2×2: excluir linha 0 → 1 linha com C, D', () => {
+    const t = mk('<tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr>');
+    const nt = deleteRowAt(t, 0);
+    eq(nt.rows.length, 1);
+    eq(nt.rows[0].cells[0].textContent, 'C');
+  });
+
+  test('rowSpan=2: duplicar linha 1 → rowSpan cresce para 3', () => {
+    const t = mk('<tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr>');
+    const nt = duplicateRowAt(t, 1);
+    eq(nt.rows.length, 3);
+    eq(nt.rows[0].cells[0].rowSpan, 3);
+  });
+
+  test('rowSpan=2: excluir linha 1 → rowSpan reduz para 1', () => {
+    const t = mk('<tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr>');
+    const nt = deleteRowAt(t, 1);
+    eq(nt.rows.length, 1);
+    eq(nt.rows[0].cells[0].rowSpan, 1);
+  });
+
+  test('colSpan=2: duplicar coluna 0 → colSpan cresce para 3', () => {
+    const t = mk('<tr><td colspan="2">A</td><td>B</td></tr>');
+    const nt = duplicateColAt(t, 0);
+    eq(nt.rows[0].cells[0].colSpan, 3);
+  });
+
+  test('colSpan=2: excluir coluna 0 → colSpan reduz para 1', () => {
+    const t = mk('<tr><td colspan="2">A</td><td>B</td></tr>');
+    const nt = deleteColAt(t, 0);
+    eq(nt.rows[0].cells[0].colSpan, 1);
+    eq(nt.rows[0].cells.length, 2);
+  });
+
+  test('Mescla 2×2 + duplicar linha 1 → rowSpan cresce', () => {
+    const t = mk('<tr><td colspan="2" rowspan="2">M</td></tr><tr></tr>');
+    const nt = duplicateRowAt(t, 1);
+    eq(nt.rows.length, 3);
+    eq(nt.rows[0].cells[0].rowSpan, 3);
+  });
+
+  test('Mescla 2×2 + duplicar coluna 0 → colSpan cresce', () => {
+    const t = mk('<tr><td colspan="2" rowspan="2">M</td></tr><tr></tr>');
+    const nt = duplicateColAt(t, 0);
+    eq(nt.rows[0].cells[0].colSpan, 3);
+  });
+
+  test('findCellPosInMatrix localiza célula corretamente', () => {
+    const t = mk('<tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr>');
+    const { matrix } = buildMatrix(t);
+    const pos = findCellPosInMatrix(t.rows[1].children[1], matrix);
+    if (!pos) throw new Error('não encontrou');
+    eq(pos.row, 1);
+    eq(pos.col, 1);
+  });
+
+  test('rebuildTableFromCells preserva atributos', () => {
+    const t = mk('<tr><td class="cell-top" colspan="2" style="height:30px">A</td></tr>');
+    const { cells } = buildMatrix(t);
+    const nt = rebuildTableFromCells(t, cells);
+    eq(nt.rows[0].cells[0].colSpan, 2);
+    eq(nt.rows[0].cells[0].className, 'cell-top');
+    eq(nt.rows[0].cells[0].style.height, '30px');
+  });
+
+  const pass = out.filter(r => r.ok).length;
+  const fail = out.length - pass;
+  return { results: out, pass, fail };
+}
+
+$('btnRunTests').addEventListener('click', () => {
+  const { results, pass, fail } = runTableTests();
+  const box = $('testResults');
+  box.style.display = 'block';
+  box.innerHTML =
+    `<div style="margin-bottom:6px;font-weight:600;">🧪 Testes de tabela: ` +
+    `<span style="color:${fail === 0 ? '#2e7d32' : '#c62828'}">${pass} passaram, ${fail} falharam</span></div>` +
+    results.map(r =>
+      `<div class="item ${r.ok ? 'pass' : 'fail'}">${r.ok ? '✓' : '✗'} ${escHtml(r.name)}${r.ok ? '' : ' — ' + escHtml(r.msg || '')}</div>`
+    ).join('');
+});
+
+/* ============ Init ============ */
+(function init() {
+  try {
+    const z = parseFloat(localStorage.getItem('etq_zoom'));
+    if (z >= 0.5 && z <= 3) zoom = z;
+  } catch(_) {}
+  document.documentElement.style.setProperty('--zoom', zoom);
+  $('zoomSelect').value = String(zoom);
+  updateEditorSize();
+  editor.style.fontSize = ($('labelFont').value || 9.5) + 'pt';
+  updateFieldsInfo();
+  checkOverflow();
+})();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then(reg => console.log('SW registrado:', reg.scope))
+        .catch(err => console.warn('Falha ao registrar SW:', err));
+    });
+  }
+
+  let deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    // Opcional: mostrar um botão "📲 Instalar app" na toolbar
+    const btn = document.createElement('button');
+    btn.textContent = '📲 Instalar app';
+    btn.className = 'primary';
+    btn.style.background = '#0d47a1';
+    btn.onclick = async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') btn.remove();
+      deferredInstallPrompt = null;
+    };
+    document.querySelector('#genBtn').parentElement.appendChild(btn);
+  });
+
+  window.addEventListener('appinstalled', () => {
+    console.log('PWA instalado');
+  });
+</script>
+</body>
+</html>

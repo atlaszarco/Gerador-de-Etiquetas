@@ -1,0 +1,26 @@
+{
+  "name": "Gerador de Etiquetas",
+  "short_name": "Etiquetas",
+  "description": "Gerador de etiquetas a partir de planilha Excel, com QR Code e código de barras.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef1f4",
+  "theme_color": "#1a237e",
+  "lang": "pt-BR",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Folha de teste",
+      "short_name": "Teste",
+      "url": "./index.html?action=test",
+      "description": "Gera uma folha de calibração"
+    }
+  ]
+}
