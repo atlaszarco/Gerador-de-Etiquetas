@@ -1,5 +1,5 @@
 /* Service Worker — Gerador de Etiquetas */
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v8.5';
 const CACHE_NAME = `etq-cache-${CACHE_VERSION}`;
 
 /* Recursos que fazem parte do "app shell". Tudo que você precisa para abrir offline. */
