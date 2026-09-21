@@ -2507,35 +2507,65 @@ $('btnRunTests').addEventListener('click', () => {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js', { scope: './' })
-        .then(reg => console.log('SW registrado:', reg.scope))
+        .then(reg => {
+          console.log('SW registrado:', reg.scope);
+  
+          // Checa se já há uma versão nova esperando ao carregar a página
+          if (reg.waiting) {
+            mostrarAvisoAtualizacao(reg.waiting);
+          }
+  
+          // Detecta novas versões enquanto o app está aberto
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+  
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // Nova versão instalada e pronta, mas ainda em waiting
+                mostrarAvisoAtualizacao(newWorker);
+              }
+            });
+          });
+        })
         .catch(err => console.warn('Falha ao registrar SW:', err));
+  
+      // Detecta quando o SW assume o controle (para recarregar)
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
     });
   }
 
-  let deferredInstallPrompt = null;
-
-  window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    deferredInstallPrompt = e;
-    if (document.getElementById('pwaInstallBtn')) return;   // já existe
-    const btn = document.createElement('button');
-    btn.id = 'pwaInstallBtn';
-    btn.textContent = '📲 Instalar app';
-    btn.className = 'primary';
-    btn.style.background = '#0d47a1';
-    btn.onclick = async () => {
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      const { outcome } = await deferredInstallPrompt.userChoice;
-      if (outcome === 'accepted') btn.remove();
-      deferredInstallPrompt = null;
+  function mostrarAvisoAtualizacao(worker) {
+    // Evita múltiplos avisos
+    if (document.getElementById('updateBanner')) return;
+  
+    const banner = document.createElement('div');
+    banner.id = 'updateBanner';
+    banner.innerHTML = `
+      <span>🔄 Uma nova versão do app está disponível.</span>
+      <button id="updateBtn">Atualizar agora</button>
+    `;
+    banner.style.cssText = `
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      background: #1a237e; color: #fff; padding: 10px 16px;
+      border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+      display: flex; align-items: center; gap: 12px;
+      font-family: inherit; font-size: 13px; z-index: 99999;
+      max-width: calc(100vw - 40px);
+    `;
+    document.body.appendChild(banner);
+  
+    document.getElementById('updateBtn').onclick = () => {
+      banner.remove();
+      // Diz ao SW em waiting para assumir agora
+      worker.postMessage({ type: 'SKIP_WAITING' });
     };
-    document.querySelector('#genBtn').parentElement.appendChild(btn);
-  });
-
-  window.addEventListener('appinstalled', () => {
-    console.log('PWA instalado');
-  });
+  }
 </script>
 </body>
 </html>
