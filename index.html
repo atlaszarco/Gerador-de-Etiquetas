@@ -202,14 +202,22 @@ button.primary.test:hover { background: #7b1fa2; }
 /* ===== Mobile ===== */
 @media (max-width: 900px) {
   html, body { overflow: auto; height: auto; min-height: 100%; }
-  body { display: block; }
+  body {
+    display: block;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
   .main { display: block; height: auto; overflow: visible; }
   .sidebar { width: auto !important; max-width: none !important; min-width: 0 !important; overflow: visible; }
   .sidebar.with-preview { width: auto !important; max-width: none !important; }
   .sidebar-resizer { display: none !important; }
   .preview-pane { min-height: 70vh; padding: 10px; }
   .preview-pane.visible { display: block; }
-  .header { padding: 8px 12px; }
+  .header {
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
   .header h1 { font-size: 13px; }
   .header .credit { font-size: 10px; }
   .panel { padding: 10px 12px; }
