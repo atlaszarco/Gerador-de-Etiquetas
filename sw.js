@@ -7,10 +7,11 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable.png',
-  /* Bibliotecas de CDN — cache local para funcionar offline */
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable.png',
+  './apple-touch-icon.png',
+  './favicon-32.png',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js'
