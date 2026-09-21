@@ -2501,8 +2501,9 @@ $('btnRunTests').addEventListener('click', () => {
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    // Opcional: mostrar um botão "📲 Instalar app" na toolbar
+    if (document.getElementById('pwaInstallBtn')) return;   // já existe
     const btn = document.createElement('button');
+    btn.id = 'pwaInstallBtn';
     btn.textContent = '📲 Instalar app';
     btn.className = 'primary';
     btn.style.background = '#0d47a1';
