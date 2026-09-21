@@ -2541,31 +2541,72 @@ $('btnRunTests').addEventListener('click', () => {
   }
 
   function mostrarAvisoAtualizacao(worker) {
-    // Evita múltiplos avisos
-    if (document.getElementById('updateBanner')) return;
-  
-    const banner = document.createElement('div');
-    banner.id = 'updateBanner';
-    banner.innerHTML = `
-      <span>🔄 Uma nova versão do app está disponível.</span>
-      <button id="updateBtn">Atualizar agora</button>
-    `;
-    banner.style.cssText = `
-      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
-      background: #1a237e; color: #fff; padding: 10px 16px;
-      border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25);
-      display: flex; align-items: center; gap: 12px;
-      font-family: inherit; font-size: 13px; z-index: 99999;
-      max-width: calc(100vw - 40px);
-    `;
-    document.body.appendChild(banner);
-  
-    document.getElementById('updateBtn').onclick = () => {
-      banner.remove();
-      // Diz ao SW em waiting para assumir agora
-      worker.postMessage({ type: 'SKIP_WAITING' });
-    };
-  }
+  if (document.getElementById('updateBanner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  banner.innerHTML = `
+    <span class="msg-long">🔄 Uma nova versão do app está disponível.</span>
+    <span class="msg-short">🔄 Nova versão disponível</span>
+    <button id="updateBtn">Atualizar agora</button>
+  `;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #updateBanner {
+      position: fixed;
+      left: 50%;
+      bottom: max(16px, env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      background: #1a237e;
+      color: #fff;
+      padding: clamp(6px, 1.5vw, 10px) clamp(10px, 2.5vw, 16px);
+      border-radius: 999px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.3);
+      display: flex;
+      align-items: center;
+      gap: clamp(6px, 1.5vw, 12px);
+      font-family: inherit;
+      font-size: clamp(11px, 3vw, 13px);
+      line-height: 1.15;
+      z-index: 99999;
+      max-width: calc(100vw - 20px);
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+    #updateBanner .msg-long,
+    #updateBanner .msg-short {
+      white-space: nowrap;
+    }
+    #updateBanner .msg-short { display: none; }
+    #updateBanner button {
+      background: #fff;
+      color: #1a237e;
+      border: none;
+      padding: clamp(4px, 1vw, 6px) clamp(8px, 2vw, 12px);
+      border-radius: 999px;
+      font: inherit;
+      font-size: clamp(11px, 2.8vw, 12.5px);
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #updateBanner button:hover { background: #e8eef7; }
+    @media (max-width: 520px) {
+      #updateBanner .msg-long  { display: none; }
+      #updateBanner .msg-short { display: inline; }
+      #updateBanner button { padding: 4px 10px; }
+    }
+  `;
+  document.head.appendChild(style);
+  document.body.appendChild(banner);
+
+  document.getElementById('updateBtn').onclick = () => {
+    banner.remove();
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  };
+}
 </script>
 </body>
 </html>
