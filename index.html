@@ -1344,7 +1344,7 @@ $('btnMergeDown').addEventListener('click', () => { const td = getActiveCell(); 
 $('btnUnmerge').addEventListener('mousedown', e => e.preventDefault());
 $('btnUnmerge').addEventListener('click', () => { const td = getActiveCell(); if (!td) return; unmerge(td); setActiveCell(null); pushHistory(); checkOverflow(); });
 
-/* ============ Apagar conteúdo / tabela ============ */
+/* ============ Apagar conteúdo ou tabela ============ */
 $('btnClearCell').addEventListener('mousedown', e => e.preventDefault());
 $('btnClearCell').addEventListener('click', () => {
   const td = getActiveCell(); if (!td) return;
