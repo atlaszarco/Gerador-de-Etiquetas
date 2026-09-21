@@ -1,5 +1,5 @@
 /* Service Worker — Gerador de Etiquetas */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `etq-cache-${CACHE_VERSION}`;
 
 /* Recursos que fazem parte do "app shell". Tudo que você precisa para abrir offline. */
@@ -20,9 +20,13 @@ const APP_SHELL = [
 /* Instalação — baixa tudo e guarda no cache */
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => {
+      return Promise.all(
+        APP_SHELL.map(url =>
+          cache.add(url).catch(err => console.warn('Falha ao cachear:', url, err))
+        )
+      );
+    }).then(() => self.skipWaiting())
   );
 });
 
